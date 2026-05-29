@@ -118,22 +118,36 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                         ic.deleteSurroundingText(lastSentTranslationLength, 0);
                     }
                     ic.commitText(translatedText, 1);
-                    lastSentTranslationLength = translatedText.length();
 
                     if (clearTranslationOnNextResult) {
-                        translationBuffer.setLength(0);
-                        translationUiManager.updateInputPreview("");
-                        lastSentTranslationLength = 0;
+                        if (translationBuffer.length() == 0) {
+                            lastSentTranslationLength = 0;
+                            if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                            updateCandidates("");
+                        } else {
+                            // A new session has already started; retain the track for the incoming translation
+                            lastSentTranslationLength = translatedText.length();
+                        }
                         clearTranslationOnNextResult = false;
-                        
-                        if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
-                        updateCandidates("");
+                    } else {
+                        lastSentTranslationLength = translatedText.length();
                     }
                 }
             }
 
             @Override
             public void onCloseTranslation() {
+                // BUG 2 FIX: Clear translation session state completely when closing
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null && lastSentTranslationLength > 0) {
+                    ic.deleteSurroundingText(lastSentTranslationLength, 0);
+                }
+                translationBuffer.setLength(0);
+                translationUiManager.updateInputPreview("");
+                lastSentTranslationLength = 0;
+                clearTranslationOnNextResult = false;
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
                 toggleTranslationMode();
             }
 
@@ -504,8 +518,12 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             }
 
             if (isTranslationMode) {
+                // BUG 1 FIX: Store, clear buffer immediately, and perform translation
+                String textToTranslate = translationBuffer.toString();
+                translationBuffer.setLength(0);
+                translationUiManager.updateInputPreview("");
                 clearTranslationOnNextResult = true;
-                translationUiManager.performTranslation(translationBuffer.toString());
+                translationUiManager.performTranslation(textToTranslate);
             } else if (isDirectTranslateEnabled) {
                 directBuffer.setLength(0);
                 lastDirectOutputLength = 0;
