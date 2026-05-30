@@ -2,16 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.app.bubble">
 
+    <!-- Normal / Special Permissions (Granted automatically at install-time) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Permission to act as a Keyboard -->
-    <uses-permission android:name="android.permission.BIND_INPUT_METHOD" />
-    <!-- Permission to act as an Accessibility Service -->
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-    
-    <!-- FIX: Added Media Projection Permission required for Android 14+ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- Dangerous / Runtime Permissions (These will now successfully show up in App Info) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- Legacy Storage Permissions for Android 12 and below (API <= 32) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    
+    <!-- Media Permissions for Android 13+ (API >= 33) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <application
         android:name=".MyApplication"
@@ -54,6 +59,13 @@
             android:name=".DebugActivity"
             android:label="Debug Mode"
             android:theme="@style/Theme.AppCompat.Light" />
+
+        <!-- NEW: Transparent Activity for Gallery Selection -->
+        <activity
+            android:name=".GalleryActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false"
+            android:launchMode="singleTop" />
 
         <!-- FIX: Added foregroundServiceType for Screen Capture support on Android 14 -->
         <service
