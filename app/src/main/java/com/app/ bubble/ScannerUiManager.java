@@ -255,16 +255,29 @@ public class ScannerUiManager implements LifecycleOwner {
         popup.getMenu().add(0, MODE_CHINESE, 4, "Chinese");
         popup.getMenu().add(0, MODE_KOREAN, 5, "Korean");
         popup.getMenu().add(0, MODE_JAPANESE, 6, "Japanese");
+        // Added dedicated redirect for dynamic model list config
+        popup.getMenu().add(0, 999, 7, "Gemini Settings");
 
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem item) {
+                if (item.getItemId() == 999) {
+                    openSettings();
+                    return true;
+                }
                 currentOcrMode = item.getItemId();
                 updateOcrModeText();
                 return true;
             }
         });
         popup.show();
+    }
+
+    private void openSettings() {
+        hide(); // Safely dismiss layout overlay windows before pushing activity
+        Intent intent = new Intent(context, SettingsActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        context.startActivity(intent);
     }
 
     private void updateOcrModeText() {
@@ -383,9 +396,10 @@ public class ScannerUiManager implements LifecycleOwner {
 
     // --- GEMINI AI LOGIC (Cloud) ---
     private void runGeminiRecognition(Bitmap bitmap) {
-        // Get API Key
+        // Get API Key and Dynamic Model
         SharedPreferences prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE);
         String apiKey = prefs.getString(SettingsActivity.KEY_API_KEY, "");
+        String activeModel = prefs.getString(SettingsActivity.KEY_ACTIVE_MODEL, "gemini-2.0-flash");
 
         if (apiKey.isEmpty()) {
             new Handler(Looper.getMainLooper()).post(() -> 
@@ -397,7 +411,8 @@ public class ScannerUiManager implements LifecycleOwner {
             Toast.makeText(context, "Sending to Gemini AI...", Toast.LENGTH_SHORT).show());
 
         cameraExecutor.execute(() -> {
-            String result = GeminiApi.performImageOcr(bitmap, apiKey);
+            // Updated to pass the dynamically loaded model string
+            String result = GeminiApi.performImageOcr(bitmap, apiKey, activeModel);
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (result != null) {
                     onScanSuccess(result);
