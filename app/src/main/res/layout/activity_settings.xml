@@ -15,6 +15,7 @@
         android:textStyle="bold"
         android:layout_marginBottom="24dp"/>
 
+    <!-- Crop Timer Configuration Row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -37,7 +38,7 @@
 
     </LinearLayout>
 
-    <!-- New Section for Gemini API Key -->
+    <!-- Gemini Configuration Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -59,6 +60,42 @@
             android:hint="Paste your API key here"
             android:inputType="textPassword"
             android:singleLine="true"/>
+
+        <!-- Dynamic Gemini Model Row -->
+        <TextView
+            android:id="@+id/gemini_model_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Active Gemini Model"
+            android:textSize="18sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Spinner
+                android:id="@+id/gemini_model_spinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp" />
+
+            <ImageButton
+                android:id="@+id/btn_fetch_models"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/change_circle_24px"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:scaleType="centerInside"
+                android:tint="#5F6368"
+                android:contentDescription="Fetch available models from server" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
