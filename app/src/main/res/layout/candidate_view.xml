@@ -23,6 +23,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Clipboard History" />
 
         <!-- KEYBOARD SWITCHER BUTTON (Updated to change_circle_24px) -->
@@ -34,6 +35,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Switch Keyboard" />
 
         <!-- TRANSLATE BUTTON (Updated to g_translate_24px) -->
@@ -45,6 +47,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Translate" />
 
         <!-- DIRECT TRANSLATE GLOBE BUTTON (Updated to electric_bolt_24px) -->
@@ -56,6 +59,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Direct Translate" />
 
         <!-- BUBBLE LAUNCHER BUTTON (Updated to bubble_24px) -->
@@ -67,6 +71,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Show Bubble" />
 
         <!-- OCR COPY BUTTON (Updated to select_all_24px) -->
@@ -78,6 +83,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="OCR Copy" />
 
         <!-- NEW: SCANNER BUTTON (Updated to document_scanner_24px) -->
@@ -89,6 +95,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Scanner" />
 
         <!-- AUTO SAVE BUTTON (Updated to save_24px) -->
@@ -100,6 +107,7 @@
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
+            android:tint="#5F6368"
             android:contentDescription="Auto Save Mode" />
 
         <!-- Vertical Separator Line -->
