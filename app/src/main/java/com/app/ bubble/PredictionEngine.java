@@ -15,7 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Handles "Type Memory", Dictionary Suggestions, Next-Word Prediction, and Auto-Correction.
- * UPDATED: Added Batch Learning and robust Thread-Safety to prevent ConcurrentModificationExceptions.
+ * UPDATED: Integrated with DictionaryDbHelper for high-speed SQLite FTS4 350k dictionary queries.
  */
 public class PredictionEngine {
 
@@ -24,6 +24,7 @@ public class PredictionEngine {
     private Set<String> userDictionary;
     // Map to store PreviousWord -> List of Likely Next Words
     private Map<String, List<String>> bigramMap; 
+    private DictionaryDbHelper dbHelper; // Database helper for 350k offline wordlist
     
     private static final String PREFS_NAME = "BubbleDict";
     private static final String KEY_WORDS = "UserWords";
@@ -46,6 +47,10 @@ public class PredictionEngine {
         userDictionary = ConcurrentHashMap.newKeySet();
         bigramMap = new ConcurrentHashMap<>();
         
+        // Initialize high-performance SQLite FTS database helper
+        dbHelper = new DictionaryDbHelper(context);
+        dbHelper.initializeDictionaryIfNeeded();
+
         // Load saved words
         Set<String> saved = prefs.getStringSet(KEY_WORDS, new HashSet<String>());
         if (saved != null) {
@@ -66,22 +71,29 @@ public class PredictionEngine {
 
     /**
      * Returns a list of suggestions that start with the given prefix.
+     * Combines high-speed SQLite FTS matches with dynamically learned user dictionary words.
      */
     public List<String> getSuggestions(String prefix) {
         List<String> results = new ArrayList<>();
         if (prefix == null || prefix.isEmpty()) return results;
 
-        String check = prefix.toLowerCase();
+        // 1. Fetch matching words from the 350,000-word SQLite database helper
+        results.addAll(dbHelper.getMatchesForPrefix(prefix));
 
+        // 2. Fetch locally learned custom words from memory and combine them
+        String check = prefix.toLowerCase();
         for (String word : userDictionary) {
             if (word.toLowerCase().startsWith(check)) {
-                if (!word.equalsIgnoreCase(check)) {
+                if (!word.equalsIgnoreCase(check) && !results.contains(word)) {
                     results.add(word);
                 }
             }
         }
-        Collections.sort(results);
-        if (results.size() > 5) return results.subList(0, 5);
+
+        // Keep candidate suggestions limited to 5 items to prevent horizontal overflow
+        if (results.size() > 5) {
+            return results.subList(0, 5);
+        }
         return results;
     }
 
@@ -174,6 +186,8 @@ public class PredictionEngine {
 
     /**
      * Auto-Correction Logic.
+     * Restricts Levenshtein matching to common Base words and User learned words
+     * to prevent calculation lag during real-time typing.
      */
     public String getBestMatch(String typo) {
         if (typo == null || typo.length() < 3) return null;
