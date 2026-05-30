@@ -14,89 +14,89 @@
         android:layout_height="match_parent"
         android:orientation="horizontal">
 
-        <!-- CLIPBOARD BUTTON -->
+        <!-- CLIPBOARD BUTTON (Updated to content_paste_24px) -->
         <ImageButton
             android:id="@+id/btn_clipboard"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_paste"
+            android:src="@drawable/content_paste_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Clipboard History" />
 
-        <!-- KEYBOARD SWITCHER BUTTON -->
+        <!-- KEYBOARD SWITCHER BUTTON (Updated to change_circle_24px) -->
         <ImageButton
             android:id="@+id/btn_keyboard_switch"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_keyboard_switch"
+            android:src="@drawable/change_circle_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Switch Keyboard" />
 
-        <!-- TRANSLATE BUTTON (Uses New Professional Icon) -->
+        <!-- TRANSLATE BUTTON (Updated to g_translate_24px) -->
         <ImageButton
             android:id="@+id/btn_translate"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_translate"
+            android:src="@drawable/g_translate_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Translate" />
 
-        <!-- DIRECT TRANSLATE GLOBE BUTTON (Uses New Professional Icon) -->
+        <!-- DIRECT TRANSLATE GLOBE BUTTON (Updated to electric_bolt_24px) -->
         <ImageButton
             android:id="@+id/btn_direct_translate"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_globe"
+            android:src="@drawable/electric_bolt_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Direct Translate" />
 
-        <!-- BUBBLE LAUNCHER BUTTON -->
+        <!-- BUBBLE LAUNCHER BUTTON (Updated to bubble_24px) -->
         <ImageButton
             android:id="@+id/btn_bubble_launcher"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_bubble_launcher"
+            android:src="@drawable/bubble_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Show Bubble" />
 
-        <!-- OCR COPY BUTTON -->
+        <!-- OCR COPY BUTTON (Updated to select_all_24px) -->
         <ImageButton
             android:id="@+id/btn_ocr_copy"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_ocr_copy"
+            android:src="@drawable/select_all_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="OCR Copy" />
 
-        <!-- NEW: SCANNER BUTTON -->
+        <!-- NEW: SCANNER BUTTON (Updated to document_scanner_24px) -->
         <ImageButton
             android:id="@+id/btn_scanner"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@android:drawable/ic_menu_camera" 
+            android:src="@drawable/document_scanner_24px" 
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:contentDescription="Scanner" />
 
-        <!-- AUTO SAVE BUTTON -->
+        <!-- AUTO SAVE BUTTON (Updated to save_24px) -->
         <ImageButton
             android:id="@+id/btn_autosave"
             android:layout_width="45dp"
             android:layout_height="match_parent"
-            android:src="@android:drawable/ic_menu_save"
+            android:src="@drawable/save_24px"
             android:background="?android:attr/selectableItemBackground"
             android:scaleType="centerInside"
             android:padding="10dp"
