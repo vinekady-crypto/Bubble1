@@ -35,11 +35,12 @@
                 android:textStyle="bold"
                 android:layout_centerInParent="true" />
 
+            <!-- Close Button (Updated to close_24px) -->
             <ImageButton
                 android:id="@+id/btn_close_scanner"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:src="@drawable/close_24px"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
@@ -56,7 +57,7 @@
             android:orientation="horizontal"
             android:weightSum="4">
 
-            <!-- 1. Gallery Button -->
+            <!-- 1. Gallery Button (Updated to photo_library_24px) -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -68,7 +69,7 @@
                     android:id="@+id/btn_open_gallery"
                     android:layout_width="45dp"
                     android:layout_height="45dp"
-                    android:src="@android:drawable/ic_menu_gallery"
+                    android:src="@drawable/photo_library_24px"
                     android:background="@drawable/circle_background_translucent"
                     android:padding="10dp"
                     android:tint="#FFFFFF" />
@@ -82,7 +83,7 @@
                     android:layout_marginTop="4dp"/>
             </LinearLayout>
 
-            <!-- 2. OCR Settings Button (NEW) -->
+            <!-- 2. OCR Settings Button (Updated to settings_24px) -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -94,7 +95,7 @@
                     android:id="@+id/btn_ocr_settings"
                     android:layout_width="45dp"
                     android:layout_height="45dp"
-                    android:src="@android:drawable/ic_menu_preferences"
+                    android:src="@drawable/settings_24px"
                     android:background="@drawable/circle_background_translucent"
                     android:padding="10dp"
                     android:tint="#FFFFFF" />
@@ -109,7 +110,7 @@
                     android:layout_marginTop="4dp"/>
             </LinearLayout>
 
-            <!-- 3. Shutter Button (Capture) -->
+            <!-- 3. Shutter Button (Updated to radio_button_checked_24px) -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -121,7 +122,7 @@
                     android:id="@+id/btn_capture"
                     android:layout_width="65dp"
                     android:layout_height="65dp"
-                    android:src="@android:drawable/ic_menu_camera"
+                    android:src="@drawable/radio_button_checked_24px"
                     android:background="@drawable/circle_background_white"
                     android:tint="#000000" />
                 
@@ -134,7 +135,7 @@
                     android:layout_marginTop="4dp"/>
             </LinearLayout>
 
-            <!-- 4. Editor Button (NEW) -->
+            <!-- 4. Editor Button (Updated to edit_24px) -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -146,7 +147,7 @@
                     android:id="@+id/btn_open_editor"
                     android:layout_width="45dp"
                     android:layout_height="45dp"
-                    android:src="@android:drawable/ic_menu_edit"
+                    android:src="@drawable/edit_24px"
                     android:background="@drawable/circle_background_translucent"
                     android:padding="10dp"
                     android:tint="#FFFFFF" />
