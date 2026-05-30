@@ -110,6 +110,18 @@
             android:tint="#5F6368"
             android:contentDescription="Auto Save Mode" />
 
+        <!-- SETTINGS BUTTON (Updated to settings_24px) -->
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/settings_24px"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:tint="#5F6368"
+            android:contentDescription="Settings" />
+
         <!-- Vertical Separator Line -->
         <View
             android:layout_width="1dp"
