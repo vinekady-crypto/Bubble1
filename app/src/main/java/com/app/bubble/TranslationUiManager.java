@@ -48,6 +48,7 @@ public class TranslationUiManager {
         void onTranslationResult(String translatedText);
         void onCloseTranslation();
         void onPasteText(String text); 
+        void onClearTranslation(); // Added for Issue #2
     }
 
     public TranslationUiManager(Context context, View rootView, TranslationListener listener) {
@@ -120,7 +121,7 @@ public class TranslationUiManager {
                 if (autoTranslateRunnable != null) {
                     handler.removeCallbacks(autoTranslateRunnable);
                 }
-                listener.onCloseTranslation();
+                listener.onClearTranslation(); // Modified for Issue #2
             }
         });
 

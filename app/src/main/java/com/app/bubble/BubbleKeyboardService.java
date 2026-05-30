@@ -47,6 +47,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private boolean isTranslationMode = false;
     private StringBuilder translationBuffer = new StringBuilder();
     private int lastSentTranslationLength = 0;
+    private String lastSentTranslation = ""; // Added to track committed translation text
     private boolean clearTranslationOnNextResult = false;
 
     private boolean isDirectTranslateEnabled = false;
@@ -69,7 +70,8 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private ImageButton btnTranslate;
     private ImageButton btnDirectTranslate; 
     private ImageButton btnBubbleLauncher; 
-    private ImageButton btnOcrCopy;       
+    private ImageButton btnOcrCopy; 
+    private ImageButton btnScanner; // NEW: Scanner Button
 
     private Keyboard keyboardQwerty;
     private Keyboard keyboardSymbols;
@@ -118,46 +120,73 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                         ic.deleteSurroundingText(lastSentTranslationLength, 0);
                     }
                     ic.commitText(translatedText, 1);
+                    lastSentTranslationLength = translatedText.length();
+                    lastSentTranslation = translatedText;
 
                     if (clearTranslationOnNextResult) {
-                        if (translationBuffer.length() == 0) {
-                            lastSentTranslationLength = 0;
-                            if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
-                            updateCandidates("");
-                        } else {
-                            // A new session has already started; retain the track for the incoming translation
-                            lastSentTranslationLength = translatedText.length();
-                        }
+                        translationBuffer.setLength(0);
+                        translationUiManager.updateInputPreview("");
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
                         clearTranslationOnNextResult = false;
-                    } else {
-                        lastSentTranslationLength = translatedText.length();
+                        
+                        if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                        updateCandidates("");
                     }
                 }
             }
 
             @Override
             public void onCloseTranslation() {
-                // BUG 2 FIX: Clear translation session state completely when closing
-                InputConnection ic = getCurrentInputConnection();
-                if (ic != null && lastSentTranslationLength > 0) {
-                    ic.deleteSurroundingText(lastSentTranslationLength, 0);
-                }
-                translationBuffer.setLength(0);
-                translationUiManager.updateInputPreview("");
-                lastSentTranslationLength = 0;
-                clearTranslationOnNextResult = false;
-                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
-                updateCandidates("");
                 toggleTranslationMode();
             }
 
             @Override
             public void onPasteText(String text) {
                 if (text != null) {
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
                     translationBuffer.append(text);
                     translationUiManager.updateInputPreview(translationBuffer.toString());
                     translationUiManager.performTranslation(translationBuffer.toString());
                 }
+            }
+
+            @Override
+            public void onClearTranslation() {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    boolean hasSelection = false;
+                    CharSequence selectedText = ic.getSelectedText(0);
+                    if (selectedText != null && selectedText.length() > 0) {
+                        hasSelection = true;
+                    } else {
+                        // Check cursor selection range via ExtractedText if getSelectedText() is unsupported or returned null
+                        android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                        if (et != null && et.selectionStart != et.selectionEnd) {
+                            hasSelection = true;
+                        }
+                    }
+
+                    if (hasSelection) {
+                        // Replace the selected text with an empty string (deletes highlighted selection)
+                        ic.commitText("", 1);
+                    } else if (lastSentTranslationLength > 0) {
+                        // Fallback to deleting surrounding translation text
+                        ic.deleteSurroundingText(lastSentTranslationLength, 0);
+                    }
+                }
+                translationBuffer.setLength(0);
+                lastSentTranslationLength = 0;
+                lastSentTranslation = "";
+                translationUiManager.updateInputPreview("");
+                
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
+                
+                toggleTranslationMode(); // Closes translation mode afterward
             }
         });
         mainLayout.addView(translationPanelView);
@@ -169,6 +198,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         setupToolbarButtons();
         mainLayout.addView(candidateView);
 
+        // Note: Using the layout that might contain GboardKeyboardView
         kv = (KeyboardView) inflater.inflate(R.layout.layout_real_keyboard, mainLayout, false);
         keyboardQwerty = new Keyboard(this, R.xml.qwerty);
         keyboardSymbols = new Keyboard(this, R.xml.symbols);
@@ -195,6 +225,10 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             @Override
             public void onPasteItem(String text) {
                 if (isTranslationMode) {
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
                     translationBuffer.append(text);
                     translationUiManager.updateInputPreview(translationBuffer.toString());
                     translationUiManager.performTranslation(translationBuffer.toString());
@@ -277,6 +311,18 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 Intent intent = new Intent(BubbleKeyboardService.this, FloatingTranslatorService.class);
                 intent.setAction("ACTION_TRIGGER_COPY_ONLY");
                 startService(intent);
+            });
+        }
+
+        // --- NEW: SCANNER BUTTON LOGIC ---
+        btnScanner = candidateView.findViewById(R.id.btn_scanner);
+        if (btnScanner != null) {
+            btnScanner.setOnClickListener(v -> {
+                // 1. Hide the Soft Keyboard
+                requestHideSelf(0);
+                
+                // 2. Launch the Full Screen Scanner
+                ScannerUiManager.getInstance(BubbleKeyboardService.this).show();
             });
         }
 
@@ -450,18 +496,36 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         if (primaryCode == Keyboard.KEYCODE_DELETE) {
             // NEW: Handle Real-Time Deletion for Auto-Save
             if (isAutoSaveEnabled && autoSaveBuffer.length() > 0) {
-                // 1. Remove the "current" text from clipboard
-                ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
-                
-                // 2. Reduce buffer
-                autoSaveBuffer.deleteCharAt(autoSaveBuffer.length() - 1);
-                
-                // 3. Add the "new shorter" text back to clipboard (if not empty)
-                if (autoSaveBuffer.length() > 0) {
-                    ClipboardManagerHelper.getInstance(this).addClip(autoSaveBuffer.toString());
+                boolean hasSelection = false;
+                CharSequence selectedText = ic.getSelectedText(0);
+                if (selectedText != null && selectedText.length() > 0) {
+                    hasSelection = true;
                 } else {
-                    // Buffer empty, next type is new
+                    android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                    if (et != null && et.selectionStart != et.selectionEnd) {
+                        hasSelection = true;
+                    }
+                }
+
+                if (hasSelection) {
+                    // Reset/Clear Auto-Save buffer if a larger block is highlighted and removed
+                    ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
+                    autoSaveBuffer.setLength(0);
                     isTypingNewEntry = true;
+                } else {
+                    // 1. Remove the "current" text from clipboard
+                    ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
+                    
+                    // 2. Reduce buffer
+                    autoSaveBuffer.deleteCharAt(autoSaveBuffer.length() - 1);
+                    
+                    // 3. Add the "new shorter" text back to clipboard (if not empty)
+                    if (autoSaveBuffer.length() > 0) {
+                        ClipboardManagerHelper.getInstance(this).addClip(autoSaveBuffer.toString());
+                    } else {
+                        // Buffer empty, next type is new
+                        isTypingNewEntry = true;
+                    }
                 }
             }
 
@@ -474,7 +538,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                     if (translationBuffer.length() == 0) {
                         ic.deleteSurroundingText(lastSentTranslationLength, 0);
                         lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
                     } 
+                } else {
+                    // Fallthrough fallback if the input preview is already empty but active
+                    handleBackspace();
                 }
             } else if (isDirectTranslateEnabled) {
                 if (directBuffer.length() > 0) {
@@ -518,12 +586,23 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             }
 
             if (isTranslationMode) {
-                // BUG 1 FIX: Store, clear buffer immediately, and perform translation
                 String textToTranslate = translationBuffer.toString();
                 translationBuffer.setLength(0);
                 translationUiManager.updateInputPreview("");
-                clearTranslationOnNextResult = true;
-                translationUiManager.performTranslation(textToTranslate);
+                
+                // Fixed Issue #1: If the live translation is already fully matching and on screen,
+                // do not call performTranslation again. Finalize tracking and avoid double-commits.
+                if (lastSentTranslationLength > 0 && !textToTranslate.isEmpty()) {
+                    lastSentTranslationLength = 0;
+                    lastSentTranslation = "";
+                    clearTranslationOnNextResult = false;
+                } else {
+                    clearTranslationOnNextResult = true;
+                    translationUiManager.performTranslation(textToTranslate);
+                }
+                
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
             } else if (isDirectTranslateEnabled) {
                 directBuffer.setLength(0);
                 lastDirectOutputLength = 0;
@@ -563,6 +642,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 }
 
                 if (isTranslationMode) {
+                    // Reset character boundary tracking if typing begins on a fresh buffer
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
                     translationBuffer.append(" ");
                     translationUiManager.updateInputPreview(translationBuffer.toString());
                     updateCandidates("");
@@ -616,6 +700,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         }
 
         if (isTranslationMode) {
+            // Reset character boundary tracking if typing begins on a fresh buffer
+            if (translationBuffer.length() == 0) {
+                lastSentTranslationLength = 0;
+                lastSentTranslation = "";
+            }
             translationBuffer.append(code);
             translationUiManager.updateInputPreview(translationBuffer.toString());
             updateCandidates(getLastWord(translationBuffer.toString()));
@@ -642,6 +731,30 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private void handleBackspace() {
         InputConnection ic = getCurrentInputConnection();
         if (ic != null) {
+            boolean selectionDeleted = false;
+            CharSequence selectedText = ic.getSelectedText(0);
+
+            if (selectedText != null && selectedText.length() > 0) {
+                ic.commitText("", 1);
+                selectionDeleted = true;
+            } else {
+                android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                if (et != null && et.selectionStart != et.selectionEnd) {
+                    ic.commitText("", 1);
+                    selectionDeleted = true;
+                }
+            }
+
+            // Sync state and clean suggestions if a selection was deleted
+            if (selectionDeleted) {
+                currentWord.setLength(0);
+                if (toolbarContainer != null) {
+                    toolbarContainer.setVisibility(View.VISIBLE);
+                }
+                updateCandidates("");
+                return;
+            }
+
             ic.deleteSurroundingText(1, 0);
             if (currentWord.length() > 0) {
                 currentWord.deleteCharAt(currentWord.length() - 1);
@@ -700,6 +813,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             isTranslationMode = true;
             translationBuffer.setLength(0); 
             lastSentTranslationLength = 0; 
+            lastSentTranslation = "";
             translationUiManager.updateInputPreview("");
         } else {
             resetToStandardKeyboard();
@@ -762,6 +876,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             
             tv.setOnClickListener(v -> {
                 if (isTranslationMode) {
+                    // Reset boundary tracking if candidate pasting begins on a fresh buffer
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
                     String currentBuffer = translationBuffer.toString();
                     int lastSpace = currentBuffer.lastIndexOf(" ");
                     if (lastSpace != -1) {

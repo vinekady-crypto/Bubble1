@@ -6,15 +6,16 @@ import android.text.TextUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Handles "Type Memory", Dictionary Suggestions, Next-Word Prediction, and Auto-Correction.
- * UPDATED: Added Batch Learning to prevent crashes when copying large texts.
+ * UPDATED: Added Batch Learning and robust Thread-Safety to prevent ConcurrentModificationExceptions.
  */
 public class PredictionEngine {
 
@@ -42,8 +43,8 @@ public class PredictionEngine {
 
     private PredictionEngine(Context context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        userDictionary = new HashSet<>();
-        bigramMap = new HashMap<>();
+        userDictionary = ConcurrentHashMap.newKeySet();
+        bigramMap = new ConcurrentHashMap<>();
         
         // Load saved words
         Set<String> saved = prefs.getStringSet(KEY_WORDS, new HashSet<String>());
@@ -91,8 +92,9 @@ public class PredictionEngine {
         if (previousWord == null) return new ArrayList<>();
         String key = previousWord.toLowerCase().trim();
         
-        if (bigramMap.containsKey(key)) {
-            return new ArrayList<>(bigramMap.get(key));
+        List<String> list = bigramMap.get(key);
+        if (list != null) {
+            return new ArrayList<>(list);
         }
         return new ArrayList<>();
     }
@@ -107,7 +109,8 @@ public class PredictionEngine {
         if (!userDictionary.contains(cleanWord)) {
             userDictionary.add(cleanWord);
             SharedPreferences.Editor editor = prefs.edit();
-            editor.putStringSet(KEY_WORDS, userDictionary);
+            // Pass a copy to prevent SharedPreference runtime transaction desync
+            editor.putStringSet(KEY_WORDS, new HashSet<>(userDictionary));
             editor.apply();
         }
     }
@@ -132,7 +135,7 @@ public class PredictionEngine {
         if (modified) {
             // Single Disk Write for thousands of words
             SharedPreferences.Editor editor = prefs.edit();
-            editor.putStringSet(KEY_WORDS, userDictionary);
+            editor.putStringSet(KEY_WORDS, new HashSet<>(userDictionary));
             editor.apply();
         }
     }
@@ -148,16 +151,23 @@ public class PredictionEngine {
         
         List<String> list = bigramMap.get(key);
         if (list == null) {
-            list = new ArrayList<>();
-            bigramMap.put(key, list);
+            list = new CopyOnWriteArrayList<>();
+            List<String> existing = bigramMap.putIfAbsent(key, list);
+            if (existing != null) {
+                list = existing;
+            }
         }
         
-        if (list.contains(value)) {
-            list.remove(value);
+        synchronized (list) {
+            if (list.contains(value)) {
+                list.remove(value);
+            }
+            list.add(0, value);
+            
+            if (list.size() > 5) {
+                list.remove(list.size() - 1);
+            }
         }
-        list.add(0, value);
-        
-        if (list.size() > 5) list.remove(list.size() - 1);
         
         saveBigrams();
     }
@@ -225,7 +235,7 @@ public class PredictionEngine {
                 if (parts.length == 2) {
                     String key = parts[0];
                     String[] values = parts[1].split(",");
-                    bigramMap.put(key, new ArrayList<>(Arrays.asList(values)));
+                    bigramMap.put(key, new CopyOnWriteArrayList<>(Arrays.asList(values)));
                 }
             }
         }

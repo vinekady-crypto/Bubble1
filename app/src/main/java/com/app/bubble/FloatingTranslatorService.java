@@ -33,6 +33,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.Spinner;
@@ -75,6 +76,9 @@ public class FloatingTranslatorService extends Service {
     private WindowManager.LayoutParams popupParams;
     private Spinner sourceSpinner;
     private Spinner targetSpinner;
+
+    // --- ERROR POPUP UI ---
+    private View errorPopupView; // New view for errors
 
     // --- CLOSE TARGET UI ---
     private View closeTargetView;
@@ -662,27 +666,86 @@ public class FloatingTranslatorService extends Service {
             startActivity(Intent.createChooser(shareIntent, "Share"));
         });
 
+        // FIX: Wrapped refine logic in try-catch to show detailed Error Popup
         popupView.findViewById(R.id.popup_refine_button).setOnClickListener(v -> {
             SharedPreferences prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE);
             String apiKey = prefs.getString(SettingsActivity.KEY_API_KEY, "");
+            
             if (apiKey.isEmpty()) {
-                Toast.makeText(this, "No API Key", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "No API Key in Settings", Toast.LENGTH_SHORT).show();
                 return;
             }
+            
             Toast.makeText(this, "Refining...", Toast.LENGTH_SHORT).show();
+            
             executor.execute(() -> {
-                String refined = GeminiApi.refine(latestTranslation, currentTargetLang, apiKey);
-                handler.post(() -> {
-                    if (refined != null) {
-                        latestTranslation = refined;
-                        TextView tv = popupView.findViewById(R.id.popup_translated_text);
-                        tv.setText(latestTranslation);
-                    } else {
-                        Toast.makeText(this, "Refine Failed", Toast.LENGTH_SHORT).show();
-                    }
-                });
+                try {
+                    // This now throws Exception if it fails
+                    String refined = GeminiApi.refine(latestTranslation, currentTargetLang, apiKey);
+                    
+                    handler.post(() -> {
+                        if (refined != null) {
+                            latestTranslation = refined;
+                            TextView tv = popupView.findViewById(R.id.popup_translated_text);
+                            if (tv != null) tv.setText(latestTranslation);
+                        }
+                    });
+                } catch (Exception e) {
+                    // FIX: Catch the error and show the Full Screen Error Popup
+                    final String errorMsg = e.getMessage();
+                    handler.post(() -> {
+                        showErrorPopup(errorMsg);
+                    });
+                }
             });
         });
+    }
+
+    /**
+     * Shows a full-screen overlay with the detailed error message.
+     */
+    private void showErrorPopup(String message) {
+        if (errorPopupView != null) windowManager.removeView(errorPopupView);
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        errorPopupView = inflater.inflate(R.layout.layout_error_popup, null);
+
+        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ? 
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : 
+                WindowManager.LayoutParams.TYPE_PHONE;
+
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.CENTER;
+
+        // Fill Data
+        TextView tvError = errorPopupView.findViewById(R.id.tv_error_details);
+        tvError.setText(message != null ? message : "Unknown Error");
+
+        // Close Button
+        Button btnClose = errorPopupView.findViewById(R.id.btn_close_error);
+        btnClose.setOnClickListener(v -> {
+            if (errorPopupView != null) {
+                windowManager.removeView(errorPopupView);
+                errorPopupView = null;
+            }
+        });
+
+        // Copy Button
+        Button btnCopy = errorPopupView.findViewById(R.id.btn_copy_error);
+        btnCopy.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = ClipData.newPlainText("Error Log", message);
+            clipboard.setPrimaryClip(clip);
+            Toast.makeText(this, "Error Copied", Toast.LENGTH_SHORT).show();
+        });
+
+        windowManager.addView(errorPopupView, params);
     }
 
     private void setupLanguageSpinners() {
@@ -727,5 +790,6 @@ public class FloatingTranslatorService extends Service {
         if (floatingBubbleView != null) windowManager.removeView(floatingBubbleView);
         if (popupView != null) windowManager.removeView(popupView);
         if (closeTargetView != null) windowManager.removeView(closeTargetView);
+        if (errorPopupView != null) windowManager.removeView(errorPopupView);
     }
 }
