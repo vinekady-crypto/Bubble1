@@ -72,6 +72,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private ImageButton btnBubbleLauncher; 
     private ImageButton btnOcrCopy; 
     private ImageButton btnScanner; // NEW: Scanner Button
+    private ImageButton btnSettings; // NEW: Settings Button
 
     private Keyboard keyboardQwerty;
     private Keyboard keyboardSymbols;
@@ -330,6 +331,16 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         btnAutoSave = candidateView.findViewById(R.id.btn_autosave);
         if (btnAutoSave != null) {
             btnAutoSave.setOnClickListener(v -> toggleAutoSaveMode());
+        }
+
+        // --- NEW: SETTINGS BUTTON LOGIC ---
+        btnSettings = candidateView.findViewById(R.id.btn_settings);
+        if (btnSettings != null) {
+            btnSettings.setOnClickListener(v -> {
+                Intent intent = new Intent(BubbleKeyboardService.this, SettingsActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            });
         }
     }
 
