@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <!-- The Card Container -->
+    <!-- FIX: Removed android:clickable="true" so the Adapter receives the click for Pasting -->
+    <LinearLayout
+        android:id="@+id/card_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:color/white"
+        android:elevation="2dp"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:foreground="?android:attr/selectableItemBackground">
+
+        <!-- The Copied Text -->
+        <TextView
+            android:id="@+id/text_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#333333"
+            android:textSize="14sp"
+            android:maxLines="6"
+            android:ellipsize="end"
+            android:text="Copied Text Here" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/help_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="How to Use Bubble Translator"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp"/>
+
+        <TextView
+            android:id="@+id/help_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Welcome to Bubble Translator!\n\nHere’s how to get started:\n\n1. Start the Service:\nOpen the app and tap the 'Start Bubble' button. Grant the necessary permissions for screen overlay and screen capture.\n\n2. The Floating Bubble:\nA floating bubble will appear on your screen. You can drag it to any position you like.\n\n3. Start a Translation:\nTap the floating bubble once to begin a new translation. The bubble will disappear, and a blue crop tool will appear.\n\n4. Select Text:\nDrag the blue box to create a rectangle around the text you want to translate. You can adjust the box by dragging it again.\n\n5. Wait for Capture:\nOnce you stop moving the blue box, the app will automatically capture the selected area after a few seconds. The blue box will disappear, and the floating bubble will reappear.\n\n6. View the Translation:\nYou will see a small notification that says 'Translation ready'. Tap the floating bubble again to open a pop-up window displaying the full translation.\n\n7. Closing the Pop-up:\nTap the back arrow in the pop-up window to close it and return to the floating bubble.\n\n8. Settings:\nIn the translation pop-up, tap the three-dot menu icon and select 'Settings' to change the duration of the crop tool overlay."
+            android:textSize="16sp"
+            android:lineSpacingExtra="4dp"/>
+
+    </LinearLayout>
+
+</ScrollView>
+

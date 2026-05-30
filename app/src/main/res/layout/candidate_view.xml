@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="45dp"
+    android:orientation="horizontal"
+    android:background="#F0F0F0"
+    android:gravity="center_vertical">
+
+    <!-- TOOLBAR CONTAINER -->
+    <!-- Groups all icons so they can be hidden during typing -->
+    <LinearLayout
+        android:id="@+id/toolbar_container"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <!-- CLIPBOARD BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_clipboard"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_paste"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Clipboard History" />
+
+        <!-- KEYBOARD SWITCHER BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_keyboard_switch"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_keyboard_switch"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Switch Keyboard" />
+
+        <!-- TRANSLATE BUTTON (Uses New Professional Icon) -->
+        <ImageButton
+            android:id="@+id/btn_translate"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_translate"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Translate" />
+
+        <!-- DIRECT TRANSLATE GLOBE BUTTON (Uses New Professional Icon) -->
+        <ImageButton
+            android:id="@+id/btn_direct_translate"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_globe"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Direct Translate" />
+
+        <!-- BUBBLE LAUNCHER BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_bubble_launcher"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_bubble_launcher"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Show Bubble" />
+
+        <!-- OCR COPY BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_ocr_copy"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_ocr_copy"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="OCR Copy" />
+
+        <!-- NEW: SCANNER BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_scanner"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@android:drawable/ic_menu_camera" 
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Scanner" />
+
+        <!-- AUTO SAVE BUTTON -->
+        <ImageButton
+            android:id="@+id/btn_autosave"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:src="@android:drawable/ic_menu_save"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="Auto Save Mode" />
+
+        <!-- Vertical Separator Line -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:background="#CCCCCC" />
+            
+    </LinearLayout>
+
+    <!-- SCROLLABLE SUGGESTIONS AREA -->
+    <HorizontalScrollView
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:fadingEdge="horizontal">
+
+        <LinearLayout
+            android:id="@+id/candidate_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp">
+
+            <!-- Suggestions added dynamically -->
+
+        </LinearLayout>
+
+    </HorizontalScrollView>
+
+</LinearLayout>

@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- ============================== -->
+    <!-- LAYER 1: LIVE CAMERA SCANNER   -->
+    <!-- ============================== -->
+    <RelativeLayout
+        android:id="@+id/camera_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="visible">
+
+        <!-- CameraX Preview View -->
+        <androidx.camera.view.PreviewView
+            android:id="@+id/camera_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Overlay: Top Bar -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:background="#40000000"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Text Scanner"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_centerInParent="true" />
+
+            <ImageButton
+                android:id="@+id/btn_close_scanner"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:tint="#FFFFFF" />
+        </RelativeLayout>
+
+        <!-- Overlay: Bottom Control Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_alignParentBottom="true"
+            android:background="#80000000"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:weightSum="4">
+
+            <!-- 1. Gallery Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_open_gallery"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:src="@android:drawable/ic_menu_gallery"
+                    android:background="@drawable/circle_background_translucent"
+                    android:padding="10dp"
+                    android:tint="#FFFFFF" />
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Import"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+            <!-- 2. OCR Settings Button (NEW) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_ocr_settings"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:src="@android:drawable/ic_menu_preferences"
+                    android:background="@drawable/circle_background_translucent"
+                    android:padding="10dp"
+                    android:tint="#FFFFFF" />
+                
+                <TextView
+                    android:id="@+id/tv_ocr_mode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OCR Mode"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+            <!-- 3. Shutter Button (Capture) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_capture"
+                    android:layout_width="65dp"
+                    android:layout_height="65dp"
+                    android:src="@android:drawable/ic_menu_camera"
+                    android:background="@drawable/circle_background_white"
+                    android:tint="#000000" />
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Scan"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+            <!-- 4. Editor Button (NEW) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_open_editor"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:src="@android:drawable/ic_menu_edit"
+                    android:background="@drawable/circle_background_translucent"
+                    android:padding="10dp"
+                    android:tint="#FFFFFF" />
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Editor"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- ============================== -->
+    <!-- LAYER 2: EDITOR & HISTORY      -->
+    <!-- ============================== -->
+    <LinearLayout
+        android:id="@+id/editor_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <!-- Editor Toolbar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:background="#F5F5F5"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="10dp"
+            android:elevation="4dp">
+
+            <ImageButton
+                android:id="@+id/btn_back_to_camera"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_revert"
+                android:background="?android:attr/selectableItemBackground"
+                android:tint="#000000" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Extracted Text"
+                android:textColor="#000000"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <ImageButton
+                android:id="@+id/btn_save_exit"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_save"
+                android:background="?android:attr/selectableItemBackground"
+                android:tint="#2196F3" />
+        </LinearLayout>
+
+        <!-- Main Text Editor -->
+        <EditText
+            android:id="@+id/edit_text_result"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@null"
+            android:gravity="top|start"
+            android:padding="16dp"
+            android:hint="Scanned text will appear here..."
+            android:textColor="#000000"
+            android:textSize="16sp"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:scrollbars="vertical" />
+
+        <!-- Actions Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:background="#EEEEEE">
+
+            <Button
+                android:id="@+id/btn_copy_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Copy"
+                android:layout_marginEnd="5dp" />
+
+            <Button
+                android:id="@+id/btn_clear_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Clear"
+                android:textColor="#F44336"
+                android:layout_marginStart="5dp" />
+        </LinearLayout>
+
+        <!-- History Section Label -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Scan History (Tap to Edit)"
+            android:background="#E0E0E0"
+            android:padding="8dp"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:textColor="#666666" />
+
+        <!-- History List -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_history"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="#FAFAFA" />
+
+    </LinearLayout>
+
+</FrameLayout>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="320dp"
+    android:orientation="vertical"
+    android:background="#EAEAEA"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- EMOJI CATEGORY TABS (Top Row) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:background="#D0D0D0">
+
+        <Button
+            android:id="@+id/tab_smileys"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:text="😀"
+            android:textSize="18sp"
+            android:background="?android:attr/selectableItemBackground"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <Button
+            android:id="@+id/tab_animals"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:text="🐻"
+            android:textSize="18sp"
+            android:background="?android:attr/selectableItemBackground"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <Button
+            android:id="@+id/tab_food"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:text="🍔"
+            android:textSize="18sp"
+            android:background="?android:attr/selectableItemBackground"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <Button
+            android:id="@+id/tab_objects"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:text="💡"
+            android:textSize="18sp"
+            android:background="?android:attr/selectableItemBackground"
+            style="?android:attr/borderlessButtonStyle"/>
+
+    </LinearLayout>
+
+    <!-- EMOJI LIST (Center) - CHANGED to RecyclerView for Horizontal Sliding -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/emoji_grid"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="4dp"
+        android:clipToPadding="false"
+        android:scrollbars="horizontal"
+        android:background="#F2F2F2"/>
+
+    <!-- BOTTOM CONTROL BAR -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:orientation="horizontal"
+        android:background="#DDDDDD"
+        android:gravity="center_vertical"
+        android:paddingStart="5dp"
+        android:paddingEnd="5dp">
+
+        <!-- Back to ABC Button -->
+        <Button
+            android:id="@+id/btn_back_to_abc"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:text="ABC"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:backgroundTint="#FFFFFF"
+            android:layout_margin="5dp"/>
+
+        <!-- Spacer -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"/>
+
+        <!-- Backspace Button for Emojis -->
+        <ImageButton
+            android:id="@+id/btn_emoji_backspace"
+            android:layout_width="60dp"
+            android:layout_height="match_parent"
+            android:src="@android:drawable/ic_input_delete"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:contentDescription="Backspace"/>
+
+    </LinearLayout>
+
+</LinearLayout>

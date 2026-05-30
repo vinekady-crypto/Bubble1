@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="250dp"
+    android:background="#F2F2F2"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- HEADER BAR -->
+    <LinearLayout
+        android:id="@+id/clipboard_header"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:background="#FFFFFF"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:elevation="2dp">
+
+        <!-- Back to Keyboard Icon -->
+        <ImageButton
+            android:id="@+id/btn_back_keyboard"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:tint="#555555"
+            android:contentDescription="Close Clipboard"/>
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Clipboard"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:paddingStart="15dp"/>
+
+        <!-- Edit/Delete Mode Toggle (Pencil) -->
+        <ImageButton
+            android:id="@+id/btn_edit_clipboard"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:src="@android:drawable/ic_menu_edit"
+            android:background="?android:attr/selectableItemBackground"
+            android:scaleType="centerInside"
+            android:tint="#555555"
+            android:contentDescription="Edit Mode"/>
+
+    </LinearLayout>
+
+    <!-- CLIPBOARD GRID LIST -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/clipboard_recycler"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/clipboard_header"
+        android:padding="4dp"
+        android:clipToPadding="false"
+        android:scrollbars="vertical"/>
+
+    <!-- UNDO BAR (Hidden by default) -->
+    <!-- Appears at the bottom when an item is deleted -->
+    <LinearLayout
+        android:id="@+id/undo_container"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_alignParentBottom="true"
+        android:background="#333333"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Item deleted"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"/>
+
+        <Button
+            android:id="@+id/btn_undo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="UNDO"
+            android:textColor="#2196F3"
+            android:textStyle="bold"
+            style="?android:attr/borderlessButtonStyle"/>
+
+    </LinearLayout>
+
+</RelativeLayout>
