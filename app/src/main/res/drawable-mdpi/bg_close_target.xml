@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+
+    <!-- This is a semi-transparent red color. You can change it if you like. -->
+    <solid android:color="#88FF0000" />
+
+    <!-- Defines a default size for the circle -->
+    <size
+        android:width="72dp"
+        android:height="72dp" />
+
+</shape>
