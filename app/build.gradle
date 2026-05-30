@@ -34,23 +34,52 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.1.0'
 
     // FIX: Added lifecycle libraries. 
-    // These are REQUIRED for ProcessLifecycleOwner used in AppOpenManager.
     implementation 'androidx.lifecycle:lifecycle-runtime:2.2.0'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
 
     // FIX: Added RecyclerView library.
-    // This is REQUIRED for the new Horizontal Emoji Slider in EmojiUtils.java
     implementation 'androidx.recyclerview:recyclerview:1.1.0'
+    
+    // FIX: Added CardView Library (Required for Error Popup)
+    implementation 'androidx.cardview:cardview:1.0.0'
     
     // FIX: Added Emoji2 Library to fix "Box" (☒) characters
     implementation 'androidx.emoji2:emoji2-views:1.4.0'
 
-    // FIX: REPLACED Google Vision with ML Kit for better accuracy (dots/symbols)
+    // --- ML KIT DEPENDENCIES (UNIVERSAL SCANNER) ---
+    
+    // 1. Latin (English, Spanish, French, etc.)
     implementation 'com.google.mlkit:text-recognition:16.0.0'
+
+    // 2. Indian (Devanagari - Correct Library Name)
+    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.0'
+
+    // 3. Chinese (Simplified & Traditional)
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
+
+    // 4. Korean (Hangul)
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.0'
+
+    // 5. Japanese (Kanji, Hiragana, Katakana)
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.0'
 
     // AdMob dependency (Upgraded to 23.0.0 for App Open Ads)
     implementation 'com.google.android.gms:play-services-ads:23.0.0'
 
     // Google Play In-App Update API
     implementation 'com.google.android.play:app-update:2.1.0'
+
+    // --- NEW: CameraX Dependencies for Live Scanner ---
+    def camerax_version = "1.2.3"
+    implementation "androidx.camera:camera-core:${camerax_version}"
+    implementation "androidx.camera:camera-camera2:${camerax_version}"
+    implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+    implementation "androidx.camera:camera-view:${camerax_version}"
+
+    // --- NEW: Guava (Required for ListenableFuture in ScannerUiManager) ---
+    implementation 'com.google.guava:guava:31.1-android'
+
+    // --- NEW: Glide for loading Gallery Images ---
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
 }
