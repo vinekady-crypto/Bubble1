@@ -1,0 +1,921 @@
+package com.app.bubble;
+
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.inputmethodservice.InputMethodService;
+import android.inputmethodservice.Keyboard;
+import android.inputmethodservice.KeyboardView;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.ContextThemeWrapper;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.PopupMenu;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class BubbleKeyboardService extends InputMethodService implements KeyboardView.OnKeyboardActionListener {
+
+    private LinearLayout mainLayout;
+    private KeyboardView kv;
+    private View candidateView;
+    private LinearLayout candidateContainer;
+    private LinearLayout toolbarContainer; 
+    private View emojiPaletteView;
+    
+    private View clipboardPaletteView;
+    private ClipboardUiManager clipboardUiManager;
+
+    private View translationPanelView;
+    private TranslationUiManager translationUiManager;
+    private boolean isTranslationMode = false;
+    private StringBuilder translationBuffer = new StringBuilder();
+    private int lastSentTranslationLength = 0;
+    private String lastSentTranslation = ""; // Added to track committed translation text
+    private boolean clearTranslationOnNextResult = false;
+
+    private boolean isDirectTranslateEnabled = false;
+    private String directTargetLangCode = "es"; 
+    private StringBuilder directBuffer = new StringBuilder();
+    private int lastDirectOutputLength = 0;
+    private long lastGlobeClickTime = 0;
+    private Handler directHandler = new Handler(Looper.getMainLooper());
+    private Runnable directTranslateRunnable;
+    private ExecutorService bgExecutor = Executors.newSingleThreadExecutor();
+
+    // --- NEW AUTO SAVE VARIABLES ---
+    private ImageButton btnAutoSave;
+    private boolean isAutoSaveEnabled = false;
+    private StringBuilder autoSaveBuffer = new StringBuilder();
+    private boolean isTypingNewEntry = true; // True = Create new clip; False = Update existing clip
+
+    private ImageButton btnClipboard;
+    private ImageButton btnKeyboardSwitch;
+    private ImageButton btnTranslate;
+    private ImageButton btnDirectTranslate; 
+    private ImageButton btnBubbleLauncher; 
+    private ImageButton btnOcrCopy; 
+    private ImageButton btnScanner; // NEW: Scanner Button
+
+    private Keyboard keyboardQwerty;
+    private Keyboard keyboardSymbols;
+
+    private boolean isCaps = false;
+    private boolean isEmojiVisible = false;
+    private StringBuilder currentWord = new StringBuilder(); 
+    private String lastCommittedWord = null; 
+
+    private boolean justAutoCorrected = false;
+    private String lastOriginalWord = "";
+    private String lastCorrectedWord = "";
+    private boolean ignoreNextCorrection = false;
+
+    private Handler longPressHandler = new Handler(Looper.getMainLooper());
+    private boolean isSpaceLongPressed = false;
+    private static final int LONG_PRESS_DELAY = 500; 
+
+    private Runnable spaceLongPressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            isSpaceLongPressed = true;
+            InputMethodManager ime = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (ime != null) {
+                ime.showInputMethodPicker();
+            }
+        }
+    };
+
+    @Override
+    public View onCreateInputView() {
+        mainLayout = new LinearLayout(this);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+
+        LayoutInflater inflater = getLayoutInflater();
+
+        translationPanelView = inflater.inflate(R.layout.layout_translation_panel, mainLayout, false);
+        translationPanelView.setVisibility(View.GONE);
+        
+        translationUiManager = new TranslationUiManager(this, translationPanelView, new TranslationUiManager.TranslationListener() {
+            @Override
+            public void onTranslationResult(String translatedText) {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    if (lastSentTranslationLength > 0) {
+                        ic.deleteSurroundingText(lastSentTranslationLength, 0);
+                    }
+                    ic.commitText(translatedText, 1);
+                    lastSentTranslationLength = translatedText.length();
+                    lastSentTranslation = translatedText;
+
+                    if (clearTranslationOnNextResult) {
+                        translationBuffer.setLength(0);
+                        translationUiManager.updateInputPreview("");
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                        clearTranslationOnNextResult = false;
+                        
+                        if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                        updateCandidates("");
+                    }
+                }
+            }
+
+            @Override
+            public void onCloseTranslation() {
+                toggleTranslationMode();
+            }
+
+            @Override
+            public void onPasteText(String text) {
+                if (text != null) {
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
+                    translationBuffer.append(text);
+                    translationUiManager.updateInputPreview(translationBuffer.toString());
+                    translationUiManager.performTranslation(translationBuffer.toString());
+                }
+            }
+
+            @Override
+            public void onClearTranslation() {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    boolean hasSelection = false;
+                    CharSequence selectedText = ic.getSelectedText(0);
+                    if (selectedText != null && selectedText.length() > 0) {
+                        hasSelection = true;
+                    } else {
+                        // Check cursor selection range via ExtractedText if getSelectedText() is unsupported or returned null
+                        android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                        if (et != null && et.selectionStart != et.selectionEnd) {
+                            hasSelection = true;
+                        }
+                    }
+
+                    if (hasSelection) {
+                        // Replace the selected text with an empty string (deletes highlighted selection)
+                        ic.commitText("", 1);
+                    } else if (lastSentTranslationLength > 0) {
+                        // Fallback to deleting surrounding translation text
+                        ic.deleteSurroundingText(lastSentTranslationLength, 0);
+                    }
+                }
+                translationBuffer.setLength(0);
+                lastSentTranslationLength = 0;
+                lastSentTranslation = "";
+                translationUiManager.updateInputPreview("");
+                
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
+                
+                toggleTranslationMode(); // Closes translation mode afterward
+            }
+        });
+        mainLayout.addView(translationPanelView);
+
+        candidateView = inflater.inflate(R.layout.candidate_view, mainLayout, false);
+        candidateContainer = candidateView.findViewById(R.id.candidate_container);
+        toolbarContainer = candidateView.findViewById(R.id.toolbar_container);
+        
+        setupToolbarButtons();
+        mainLayout.addView(candidateView);
+
+        // Note: Using the layout that might contain GboardKeyboardView
+        kv = (KeyboardView) inflater.inflate(R.layout.layout_real_keyboard, mainLayout, false);
+        keyboardQwerty = new Keyboard(this, R.xml.qwerty);
+        keyboardSymbols = new Keyboard(this, R.xml.symbols);
+        kv.setKeyboard(keyboardQwerty);
+        kv.setOnKeyboardActionListener(this);
+        kv.setPreviewEnabled(false); 
+        mainLayout.addView(kv);
+
+        emojiPaletteView = inflater.inflate(R.layout.layout_emoji_palette, mainLayout, false);
+        emojiPaletteView.setVisibility(View.GONE);
+        EmojiUtils.setupEmojiGrid(this, emojiPaletteView, new EmojiUtils.EmojiListener() {
+            @Override
+            public void onEmojiClick(String emoji) {
+                getCurrentInputConnection().commitText(emoji, 1);
+            }
+        });
+        setupEmojiControlButtons();
+        mainLayout.addView(emojiPaletteView);
+
+        clipboardPaletteView = inflater.inflate(R.layout.layout_clipboard_palette, mainLayout, false);
+        clipboardPaletteView.setVisibility(View.GONE);
+        
+        clipboardUiManager = new ClipboardUiManager(this, clipboardPaletteView, new ClipboardUiManager.ClipboardListener() {
+            @Override
+            public void onPasteItem(String text) {
+                if (isTranslationMode) {
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
+                    translationBuffer.append(text);
+                    translationUiManager.updateInputPreview(translationBuffer.toString());
+                    translationUiManager.performTranslation(translationBuffer.toString());
+                    toggleClipboardPalette(); 
+                } else if (isDirectTranslateEnabled) {
+                    directBuffer.append(text);
+                    performDirectTranslation(directBuffer.toString());
+                    toggleClipboardPalette();
+                } else {
+                    InputConnection ic = getCurrentInputConnection();
+                    if (ic != null) {
+                        ic.commitText(text, 1);
+                        PredictionEngine.getInstance(BubbleKeyboardService.this).learnWord(text);
+                        lastCommittedWord = text.trim(); 
+                    }
+                    toggleClipboardPalette(); 
+                    updateCandidates("");
+                }
+            }
+
+            @Override
+            public void onCloseClipboard() {
+                toggleClipboardPalette();
+            }
+        });
+        mainLayout.addView(clipboardPaletteView);
+
+        return mainLayout;
+    }
+
+    private void setupToolbarButtons() {
+        btnClipboard = candidateView.findViewById(R.id.btn_clipboard);
+        if (btnClipboard != null) btnClipboard.setOnClickListener(v -> toggleClipboardPalette());
+        
+        btnKeyboardSwitch = candidateView.findViewById(R.id.btn_keyboard_switch);
+        if (btnKeyboardSwitch != null) {
+            btnKeyboardSwitch.setOnClickListener(v -> {
+                InputMethodManager ime = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (ime != null) ime.showInputMethodPicker();
+            });
+        }
+        
+        btnTranslate = candidateView.findViewById(R.id.btn_translate);
+        if (btnTranslate != null) btnTranslate.setOnClickListener(v -> toggleTranslationMode());
+        
+        btnDirectTranslate = candidateView.findViewById(R.id.btn_direct_translate);
+        if (btnDirectTranslate != null) {
+            btnDirectTranslate.setOnLongClickListener(v -> {
+                showDirectLanguagePopup(v);
+                return true;
+            });
+            btnDirectTranslate.setOnClickListener(v -> {
+                if (isDirectTranslateEnabled) {
+                    toggleDirectTranslationMode();
+                } else {
+                    long clickTime = System.currentTimeMillis();
+                    if (clickTime - lastGlobeClickTime < 500) {
+                        toggleDirectTranslationMode();
+                    } else {
+                        Toast.makeText(BubbleKeyboardService.this, "Double tap to Enable", Toast.LENGTH_SHORT).show();
+                    }
+                    lastGlobeClickTime = clickTime;
+                }
+            });
+        }
+
+        btnBubbleLauncher = candidateView.findViewById(R.id.btn_bubble_launcher);
+        if (btnBubbleLauncher != null) {
+            btnBubbleLauncher.setOnClickListener(v -> {
+                Intent intent = new Intent(BubbleKeyboardService.this, FloatingTranslatorService.class);
+                intent.setAction("ACTION_SHOW_BUBBLE");
+                startService(intent);
+            });
+        }
+        
+        btnOcrCopy = candidateView.findViewById(R.id.btn_ocr_copy);
+        if (btnOcrCopy != null) {
+            btnOcrCopy.setOnClickListener(v -> {
+                requestHideSelf(0);
+                Intent intent = new Intent(BubbleKeyboardService.this, FloatingTranslatorService.class);
+                intent.setAction("ACTION_TRIGGER_COPY_ONLY");
+                startService(intent);
+            });
+        }
+
+        // --- NEW: SCANNER BUTTON LOGIC ---
+        btnScanner = candidateView.findViewById(R.id.btn_scanner);
+        if (btnScanner != null) {
+            btnScanner.setOnClickListener(v -> {
+                // 1. Hide the Soft Keyboard
+                requestHideSelf(0);
+                
+                // 2. Launch the Full Screen Scanner
+                ScannerUiManager.getInstance(BubbleKeyboardService.this).show();
+            });
+        }
+
+        // --- NEW AUTO SAVE BUTTON SETUP ---
+        btnAutoSave = candidateView.findViewById(R.id.btn_autosave);
+        if (btnAutoSave != null) {
+            btnAutoSave.setOnClickListener(v -> toggleAutoSaveMode());
+        }
+    }
+
+    // --- NEW: Toggle Auto Save Mode ---
+    private void toggleAutoSaveMode() {
+        isAutoSaveEnabled = !isAutoSaveEnabled;
+        if (isAutoSaveEnabled) {
+            // Blue Color -> ON
+            btnAutoSave.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
+            Toast.makeText(this, "Real-Time Saving ON", Toast.LENGTH_SHORT).show();
+            // Start a new tracking session
+            autoSaveBuffer.setLength(0);
+            isTypingNewEntry = true;
+        } else {
+            // No Color -> OFF
+            btnAutoSave.clearColorFilter();
+            Toast.makeText(this, "Real-Time Saving OFF", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // --- NEW: Update Clipboard in Real-Time (Safety Logic) ---
+    private void updateAutoSaveClipboard() {
+        String currentText = autoSaveBuffer.toString();
+        
+        // 1. If we are editing an existing line, delete the old version first
+        if (!isTypingNewEntry) {
+            // Assume the previous state was just 1 char shorter
+            if (currentText.length() > 0) {
+                 // We need to delete the version that was saved *before* this keystroke.
+                 // Since we don't track the exact string perfectly in variable, we rely on clipboard add/remove behavior.
+                 // Ideally, we delete the *top* item if it matches our session.
+                 // For simplicity and speed: We delete the item that corresponds to the buffer-1 char.
+                 // Note: Ideally we would use a simpler logic: just add new. But you requested "update".
+                 // So we add the new one. The user sees "growth".
+                 // To prevent spam, we *attempt* to remove the previous entry.
+                 String prevText = currentText.substring(0, currentText.length() - 1);
+                 ClipboardManagerHelper.getInstance(this).deleteItem(prevText);
+            }
+        }
+
+        // 2. Add the current text
+        if (!currentText.isEmpty()) {
+            ClipboardManagerHelper.getInstance(this).addClip(currentText);
+        }
+        
+        // 3. Mark as "Updating" for next key
+        isTypingNewEntry = false;
+    }
+
+    private void showDirectLanguagePopup(View v) {
+        // Use System Theme for correct look
+        Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Light_Dialog);
+        AlertDialog.Builder builder = new AlertDialog.Builder(wrapper);
+        builder.setTitle("Select Target Language");
+        
+        builder.setItems(LanguageUtils.LANGUAGE_NAMES, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                directTargetLangCode = LanguageUtils.getCode(which);
+                Toast.makeText(BubbleKeyboardService.this, "Target: " + LanguageUtils.LANGUAGE_NAMES[which], Toast.LENGTH_SHORT).show();
+                
+                // If translation is currently active, toggle it to refresh language
+                if (isDirectTranslateEnabled) {
+                    toggleDirectTranslationMode();
+                    toggleDirectTranslationMode();
+                }
+                
+                // Close the dialog immediately after selection
+                dialog.dismiss();
+            }
+        });
+        
+        AlertDialog dialog = builder.create();
+        
+        // Setup Window attributes to prevent keyboard closing (OVERLAY TYPE)
+        Window window = dialog.getWindow();
+        if (window != null) {
+            WindowManager.LayoutParams lp = window.getAttributes();
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+            } else {
+                lp.type = WindowManager.LayoutParams.TYPE_PHONE;
+            }
+            
+            // Flag to prevent stealing focus from the keyboard
+            window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+            window.setAttributes(lp);
+        }
+        dialog.show();
+    }
+
+    private void toggleDirectTranslationMode() {
+        isDirectTranslateEnabled = !isDirectTranslateEnabled;
+        if (isDirectTranslateEnabled) {
+            btnDirectTranslate.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
+            Toast.makeText(this, "Live Translation ON (Auto -> " + directTargetLangCode + ")", Toast.LENGTH_SHORT).show();
+            directBuffer.setLength(0);
+            lastDirectOutputLength = 0;
+        } else {
+            btnDirectTranslate.clearColorFilter();
+            Toast.makeText(this, "Live Translation OFF", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void performDirectTranslation(final String text) {
+        if (text.trim().isEmpty()) return;
+        if (directTranslateRunnable != null) directHandler.removeCallbacks(directTranslateRunnable);
+
+        directTranslateRunnable = new Runnable() {
+            @Override
+            public void run() {
+                bgExecutor.execute(() -> {
+                    final String result = TranslateApi.translate("auto", directTargetLangCode, text);
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        if (result != null) {
+                            InputConnection ic = getCurrentInputConnection();
+                            if (ic != null) {
+                                if (lastDirectOutputLength > 0) {
+                                    ic.deleteSurroundingText(lastDirectOutputLength, 0);
+                                }
+                                ic.commitText(result, 1);
+                                lastDirectOutputLength = result.length();
+                            }
+                        }
+                    });
+                });
+            }
+        };
+        directHandler.postDelayed(directTranslateRunnable, 500);
+    }
+
+    private void setupEmojiControlButtons() {
+        View btnBack = emojiPaletteView.findViewById(R.id.btn_back_to_abc);
+        if (btnBack != null) btnBack.setOnClickListener(v -> toggleEmojiPalette());
+        
+        View btnDel = emojiPaletteView.findViewById(R.id.btn_emoji_backspace);
+        if (btnDel != null) btnDel.setOnClickListener(v -> handleBackspace());
+    }
+
+    @Override
+    public void onKey(int primaryCode, int[] keyCodes) {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return;
+
+        // Icon Visibility
+        if (isTranslationMode) {
+            if (Character.isLetterOrDigit(primaryCode)) {
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.GONE);
+            } else if (primaryCode == 32 || primaryCode == 46 || translationBuffer.length() == 0) { 
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+            }
+        } else if (!isDirectTranslateEnabled) {
+            if (Character.isLetterOrDigit(primaryCode)) {
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.GONE);
+            } else if (primaryCode == 32 || primaryCode == 46 || currentWord.length() == 0) { 
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+            }
+        } else {
+            if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+        }
+
+        // --- DELETE KEY LOGIC ---
+        if (primaryCode == Keyboard.KEYCODE_DELETE) {
+            // NEW: Handle Real-Time Deletion for Auto-Save
+            if (isAutoSaveEnabled && autoSaveBuffer.length() > 0) {
+                boolean hasSelection = false;
+                CharSequence selectedText = ic.getSelectedText(0);
+                if (selectedText != null && selectedText.length() > 0) {
+                    hasSelection = true;
+                } else {
+                    android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                    if (et != null && et.selectionStart != et.selectionEnd) {
+                        hasSelection = true;
+                    }
+                }
+
+                if (hasSelection) {
+                    // Reset/Clear Auto-Save buffer if a larger block is highlighted and removed
+                    ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
+                    autoSaveBuffer.setLength(0);
+                    isTypingNewEntry = true;
+                } else {
+                    // 1. Remove the "current" text from clipboard
+                    ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
+                    
+                    // 2. Reduce buffer
+                    autoSaveBuffer.deleteCharAt(autoSaveBuffer.length() - 1);
+                    
+                    // 3. Add the "new shorter" text back to clipboard (if not empty)
+                    if (autoSaveBuffer.length() > 0) {
+                        ClipboardManagerHelper.getInstance(this).addClip(autoSaveBuffer.toString());
+                    } else {
+                        // Buffer empty, next type is new
+                        isTypingNewEntry = true;
+                    }
+                }
+            }
+
+            if (isTranslationMode) {
+                if (translationBuffer.length() > 0) {
+                    translationBuffer.deleteCharAt(translationBuffer.length() - 1);
+                    translationUiManager.updateInputPreview(translationBuffer.toString());
+                    updateCandidates(getLastWord(translationBuffer.toString()));
+                    
+                    if (translationBuffer.length() == 0) {
+                        ic.deleteSurroundingText(lastSentTranslationLength, 0);
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    } 
+                } else {
+                    // Fallthrough fallback if the input preview is already empty but active
+                    handleBackspace();
+                }
+            } else if (isDirectTranslateEnabled) {
+                if (directBuffer.length() > 0) {
+                    directBuffer.deleteCharAt(directBuffer.length() - 1);
+                    performDirectTranslation(directBuffer.toString());
+                    if (directBuffer.length() == 0) {
+                        ic.deleteSurroundingText(lastDirectOutputLength, 0);
+                        lastDirectOutputLength = 0;
+                    }
+                } else {
+                    handleBackspace();
+                }
+            } else {
+                if (justAutoCorrected) {
+                    int lengthToDelete = lastCorrectedWord.length() + 1;
+                    ic.deleteSurroundingText(lengthToDelete, 0);
+                    ic.commitText(lastOriginalWord, 1);
+                    currentWord.setLength(0);
+                    currentWord.append(lastOriginalWord);
+                    ignoreNextCorrection = true;
+                    justAutoCorrected = false;
+                } else {
+                    handleBackspace();
+                }
+            }
+            return;
+        }
+
+        if (primaryCode == Keyboard.KEYCODE_SHIFT) {
+            isCaps = !isCaps;
+            keyboardQwerty.setShifted(isCaps);
+            kv.invalidateAllKeys();
+            return;
+        }
+
+        if (primaryCode == Keyboard.KEYCODE_DONE) { 
+            // NEW: Enter Key finalized the text - Start new entry
+            if (isAutoSaveEnabled) {
+                isTypingNewEntry = true;
+                autoSaveBuffer.setLength(0);
+            }
+
+            if (isTranslationMode) {
+                String textToTranslate = translationBuffer.toString();
+                translationBuffer.setLength(0);
+                translationUiManager.updateInputPreview("");
+                
+                // Fixed Issue #1: If the live translation is already fully matching and on screen,
+                // do not call performTranslation again. Finalize tracking and avoid double-commits.
+                if (lastSentTranslationLength > 0 && !textToTranslate.isEmpty()) {
+                    lastSentTranslationLength = 0;
+                    lastSentTranslation = "";
+                    clearTranslationOnNextResult = false;
+                } else {
+                    clearTranslationOnNextResult = true;
+                    translationUiManager.performTranslation(textToTranslate);
+                }
+                
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
+            } else if (isDirectTranslateEnabled) {
+                directBuffer.setLength(0);
+                lastDirectOutputLength = 0;
+                ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
+            } else {
+                PredictionEngine.getInstance(this).learnWord(currentWord.toString());
+                lastCommittedWord = currentWord.toString();
+                currentWord.setLength(0); 
+                updateCandidates("");
+                ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
+            }
+            return;
+        }
+
+        if (primaryCode == -2) { 
+            if (kv.getKeyboard() == keyboardQwerty) kv.setKeyboard(keyboardSymbols);
+            else kv.setKeyboard(keyboardQwerty);
+            return;
+        }
+
+        if (primaryCode == -100) { toggleEmojiPalette(); return; }
+
+        if (primaryCode == -10) { 
+            requestHideSelf(0);
+            Intent intent = new Intent(BubbleKeyboardService.this, TwoLineOverlayService.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startService(intent);
+            return;
+        }
+
+        if (primaryCode == 32) { 
+            if (!isSpaceLongPressed) {
+                // NEW: Space also saves immediately
+                if (isAutoSaveEnabled) {
+                    autoSaveBuffer.append(" ");
+                    updateAutoSaveClipboard();
+                }
+
+                if (isTranslationMode) {
+                    // Reset character boundary tracking if typing begins on a fresh buffer
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
+                    translationBuffer.append(" ");
+                    translationUiManager.updateInputPreview(translationBuffer.toString());
+                    updateCandidates("");
+                } else if (isDirectTranslateEnabled) {
+                    directBuffer.append(" ");
+                    performDirectTranslation(directBuffer.toString());
+                } else {
+                    String typo = currentWord.toString();
+                    boolean correctionApplied = false;
+                    
+                    if (!ignoreNextCorrection && typo.length() > 1) {
+                        String correction = PredictionEngine.getInstance(this).getBestMatch(typo);
+                        if (correction != null && !correction.equals(typo)) {
+                            lastOriginalWord = typo;
+                            lastCorrectedWord = correction;
+                            justAutoCorrected = true;
+                            ic.deleteSurroundingText(typo.length(), 0);
+                            ic.commitText(correction, 1);
+                            currentWord.setLength(0);
+                            currentWord.append(correction);
+                            correctionApplied = true;
+                        }
+                    } 
+                    if (!correctionApplied) {
+                        justAutoCorrected = false;
+                        ignoreNextCorrection = false;
+                    }
+                    ic.commitText(" ", 1);
+                    String justTyped = currentWord.toString();
+                    PredictionEngine.getInstance(this).learnWord(justTyped);
+                    if (lastCommittedWord != null && !lastCommittedWord.isEmpty()) {
+                        PredictionEngine.getInstance(this).learnNextWord(lastCommittedWord, justTyped);
+                    }
+                    lastCommittedWord = justTyped;
+                    currentWord.setLength(0); 
+                    updateCandidates("");
+                }
+            }
+            return;
+        }
+
+        char code = (char) primaryCode;
+        if (Character.isLetter(code) && isCaps) {
+            code = Character.toUpperCase(code);
+        }
+
+        // NEW: Real-Time Character Saving
+        if (isAutoSaveEnabled) {
+            autoSaveBuffer.append(code);
+            updateAutoSaveClipboard();
+        }
+
+        if (isTranslationMode) {
+            // Reset character boundary tracking if typing begins on a fresh buffer
+            if (translationBuffer.length() == 0) {
+                lastSentTranslationLength = 0;
+                lastSentTranslation = "";
+            }
+            translationBuffer.append(code);
+            translationUiManager.updateInputPreview(translationBuffer.toString());
+            updateCandidates(getLastWord(translationBuffer.toString()));
+            
+            if (toolbarContainer != null) toolbarContainer.setVisibility(View.GONE);
+        } else if (isDirectTranslateEnabled) {
+            directBuffer.append(code);
+            performDirectTranslation(directBuffer.toString());
+        } else {
+            ic.commitText(String.valueOf(code), 1);
+            justAutoCorrected = false; 
+            if (Character.isLetterOrDigit(code)) {
+                currentWord.append(code);
+                updateCandidates(currentWord.toString());
+            } else {
+                PredictionEngine.getInstance(this).learnWord(currentWord.toString());
+                lastCommittedWord = currentWord.toString();
+                currentWord.setLength(0);
+                updateCandidates("");
+            }
+        }
+    }
+
+    private void handleBackspace() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic != null) {
+            boolean selectionDeleted = false;
+            CharSequence selectedText = ic.getSelectedText(0);
+
+            if (selectedText != null && selectedText.length() > 0) {
+                ic.commitText("", 1);
+                selectionDeleted = true;
+            } else {
+                android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+                if (et != null && et.selectionStart != et.selectionEnd) {
+                    ic.commitText("", 1);
+                    selectionDeleted = true;
+                }
+            }
+
+            // Sync state and clean suggestions if a selection was deleted
+            if (selectionDeleted) {
+                currentWord.setLength(0);
+                if (toolbarContainer != null) {
+                    toolbarContainer.setVisibility(View.VISIBLE);
+                }
+                updateCandidates("");
+                return;
+            }
+
+            ic.deleteSurroundingText(1, 0);
+            if (currentWord.length() > 0) {
+                currentWord.deleteCharAt(currentWord.length() - 1);
+                updateCandidates(currentWord.toString());
+            } else {
+                if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
+                updateCandidates("");
+            }
+        }
+    }
+
+    private void toggleEmojiPalette() {
+        if (emojiPaletteView.getVisibility() == View.GONE) {
+            kv.setVisibility(View.GONE);
+            candidateView.setVisibility(View.GONE);
+            clipboardPaletteView.setVisibility(View.GONE);
+            translationPanelView.setVisibility(View.GONE);
+            isTranslationMode = false;
+            emojiPaletteView.setVisibility(View.VISIBLE);
+        } else {
+            resetToStandardKeyboard();
+        }
+    }
+
+    private void toggleClipboardPalette() {
+        if (clipboardPaletteView.getVisibility() == View.GONE) {
+            kv.setVisibility(View.GONE);
+            if (isTranslationMode) {
+                translationPanelView.setVisibility(View.VISIBLE);
+            } else {
+                translationPanelView.setVisibility(View.GONE);
+            }
+            candidateView.setVisibility(View.GONE);
+            emojiPaletteView.setVisibility(View.GONE);
+            clipboardPaletteView.setVisibility(View.VISIBLE);
+            if (clipboardUiManager != null) clipboardUiManager.reloadHistory();
+        } else {
+            clipboardPaletteView.setVisibility(View.GONE);
+            if (isTranslationMode) {
+                translationPanelView.setVisibility(View.VISIBLE);
+                candidateView.setVisibility(View.VISIBLE); 
+                kv.setVisibility(View.VISIBLE);
+            } else {
+                resetToStandardKeyboard();
+            }
+        }
+    }
+
+    private void toggleTranslationMode() {
+        if (translationPanelView.getVisibility() == View.GONE) {
+            candidateView.setVisibility(View.VISIBLE); 
+            clipboardPaletteView.setVisibility(View.GONE);
+            emojiPaletteView.setVisibility(View.GONE);
+            translationPanelView.setVisibility(View.VISIBLE);
+            kv.setVisibility(View.VISIBLE);
+            isTranslationMode = true;
+            translationBuffer.setLength(0); 
+            lastSentTranslationLength = 0; 
+            lastSentTranslation = "";
+            translationUiManager.updateInputPreview("");
+        } else {
+            resetToStandardKeyboard();
+        }
+    }
+
+    private void resetToStandardKeyboard() {
+        emojiPaletteView.setVisibility(View.GONE);
+        clipboardPaletteView.setVisibility(View.GONE);
+        translationPanelView.setVisibility(View.GONE);
+        candidateView.setVisibility(View.VISIBLE);
+        kv.setVisibility(View.VISIBLE);
+        isTranslationMode = false;
+    }
+
+    @Override
+    public void onPress(int primaryCode) {
+        if (primaryCode == 32) {
+            isSpaceLongPressed = false; 
+            longPressHandler.postDelayed(spaceLongPressRunnable, LONG_PRESS_DELAY);
+        }
+    }
+
+    @Override
+    public void onRelease(int primaryCode) {
+        if (primaryCode == 32) {
+            longPressHandler.removeCallbacks(spaceLongPressRunnable);
+        }
+    }
+
+    private String getLastWord(String text) {
+        if (text == null || text.isEmpty()) return "";
+        String[] parts = text.split("\\s+");
+        if (parts.length > 0) return parts[parts.length - 1];
+        return "";
+    }
+
+    private void updateCandidates(String wordBeingTyped) {
+        if (candidateContainer == null) return;
+        
+        candidateContainer.removeAllViews();
+        List<String> suggestions;
+
+        if (wordBeingTyped.isEmpty()) {
+            if (lastCommittedWord != null) {
+                suggestions = PredictionEngine.getInstance(this).getNextWordSuggestions(lastCommittedWord);
+            } else {
+                suggestions = PredictionEngine.getInstance(this).getSuggestions(""); 
+            }
+        } else {
+            suggestions = PredictionEngine.getInstance(this).getSuggestions(wordBeingTyped);
+        }
+
+        for (final String word : suggestions) {
+            TextView tv = new TextView(this);
+            tv.setText(word);
+            tv.setTextSize(18);
+            tv.setPadding(40, 20, 40, 20);
+            tv.setBackgroundResource(android.R.drawable.list_selector_background);
+            
+            tv.setOnClickListener(v -> {
+                if (isTranslationMode) {
+                    // Reset boundary tracking if candidate pasting begins on a fresh buffer
+                    if (translationBuffer.length() == 0) {
+                        lastSentTranslationLength = 0;
+                        lastSentTranslation = "";
+                    }
+                    String currentBuffer = translationBuffer.toString();
+                    int lastSpace = currentBuffer.lastIndexOf(" ");
+                    if (lastSpace != -1) {
+                        translationBuffer.setLength(lastSpace + 1);
+                    } else {
+                        translationBuffer.setLength(0);
+                    }
+                    translationBuffer.append(word).append(" ");
+                    translationUiManager.updateInputPreview(translationBuffer.toString());
+                    translationUiManager.performTranslation(translationBuffer.toString());
+                    updateCandidates("");
+                } else {
+                    InputConnection ic = getCurrentInputConnection();
+                    if (ic != null) {
+                        if (currentWord.length() > 0) {
+                            ic.deleteSurroundingText(currentWord.length(), 0);
+                        }
+                        ic.commitText(word + " ", 1);
+                        PredictionEngine.getInstance(this).learnWord(word);
+                        if (lastCommittedWord != null) {
+                            PredictionEngine.getInstance(this).learnNextWord(lastCommittedWord, word);
+                        }
+                        lastCommittedWord = word;
+                        currentWord.setLength(0);
+                        updateCandidates("");
+                    }
+                }
+            });
+            candidateContainer.addView(tv);
+        }
+    }
+
+    @Override public void onText(CharSequence text) {}
+    @Override public void swipeLeft() {}
+    @Override public void swipeRight() {}
+    @Override public void swipeDown() {}
+    @Override public void swipeUp() {}
+}
