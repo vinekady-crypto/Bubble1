@@ -1,5 +1,21 @@
+
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Existing Strings -->
     <string name="app_name">bubble</string>
     <string name="start_button_text">Start Bubble Translator</string>
+
+    <!-- Dynamic Toolbar Customization Labels -->
+    <string name="label_clipboard">Clipboard</string>
+    <string name="label_keyboard_switch">Switch Keyboard</string>
+    <string name="label_translate">Translate</string>
+    <string name="label_direct_translate">Direct Translate</string>
+    <string name="label_bubble_launcher">Show Bubble</string>
+    <string name="label_ocr_copy">OCR Copy</string>
+    <string name="label_scanner">Scanner</string>
+    <string name="label_autosave">Auto Save</string>
+    <string name="label_microphone">Voice Input</string>
+
+    <!-- Gboard-Style Customizer Instructions Header -->
+    <string name="customizer_header_hint">Hold and drag to customize</string>
 </resources>
