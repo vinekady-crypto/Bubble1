@@ -15,6 +15,9 @@
     <string name="label_autosave">Auto Save</string>
     <string name="label_microphone">Voice Input</string>
 
+    <!-- Dynamic Toolbar Fallbacks -->
+    <string name="settings_title">Settings</string>
+
     <!-- Gboard-Style Customizer Instructions Header -->
     <string name="customizer_header_hint">Hold and drag to customize</string>
 </resources>
