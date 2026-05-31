@@ -34,6 +34,7 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -52,7 +53,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private LinearLayout candidateContainer;
     private LinearLayout toolbarContainer; 
     private View emojiPaletteView;
-    
+
     private View clipboardPaletteView;
     private ClipboardUiManager clipboardUiManager;
 
@@ -136,7 +137,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
         translationPanelView = inflater.inflate(R.layout.layout_translation_panel, mainLayout, false);
         translationPanelView.setVisibility(View.GONE);
-        
+
         translationUiManager = new TranslationUiManager(this, translationPanelView, new TranslationUiManager.TranslationListener() {
             @Override
             public void onTranslationResult(String translatedText) {
@@ -155,7 +156,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                         lastSentTranslationLength = 0;
                         lastSentTranslation = "";
                         clearTranslationOnNextResult = false;
-                        
+
                         if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
                         updateCandidates("");
                     }
@@ -205,10 +206,10 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 lastSentTranslationLength = 0;
                 lastSentTranslation = "";
                 translationUiManager.updateInputPreview("");
-                
+
                 if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
                 updateCandidates("");
-                
+
                 toggleTranslationMode();
             }
         });
@@ -233,11 +234,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         candidateView = inflater.inflate(R.layout.candidate_view, mainLayout, false);
         candidateContainer = candidateView.findViewById(R.id.candidate_container);
         toolbarContainer = candidateView.findViewById(R.id.toolbar_container);
-        
+
         // Permanent 4-Square Button setup
         btnGridMenu = candidateView.findViewById(R.id.btn_grid_menu);
         activeToolsContainer = candidateView.findViewById(R.id.active_tools_container);
-        
+
         if (btnGridMenu != null) {
             btnGridMenu.setOnClickListener(v -> toggleGridMenu());
         }
@@ -276,7 +277,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
         clipboardPaletteView = inflater.inflate(R.layout.layout_clipboard_palette, mainLayout, false);
         clipboardPaletteView.setVisibility(View.GONE);
-        
+
         clipboardUiManager = new ClipboardUiManager(this, clipboardPaletteView, new ClipboardUiManager.ClipboardListener() {
             @Override
             public void onPasteItem(String text) {
@@ -413,7 +414,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private void triggerVoiceInput() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            
+
             Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show();
             // Launch the Main Settings redirection
             Intent intent = new Intent(this, MainActivity.class);
@@ -464,11 +465,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             clipboardPaletteView.setVisibility(View.GONE);
             translationPanelView.setVisibility(View.GONE);
             isTranslationMode = false;
-            
+
             gridMenuView.setVisibility(View.VISIBLE);
             isGridMenuVisible = true;
             btnGridMenu.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
-            
+
             // Reload available tools lists
             loadGridAdapterData();
         } else {
@@ -581,7 +582,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     // --- NEW: Update Clipboard in Real-Time (Safety Logic) ---
     private void updateAutoSaveClipboard() {
         String currentText = autoSaveBuffer.toString();
-        
+
         // 1. If we are editing an existing line, delete the old version first
         if (!isTypingNewEntry) {
             // Assume the previous state was just 1 char shorter
@@ -595,7 +596,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         if (!currentText.isEmpty()) {
             ClipboardManagerHelper.getInstance(this).addClip(currentText);
         }
-        
+
         // 3. Mark as "Updating" for next key
         isTypingNewEntry = false;
     }
@@ -604,34 +605,34 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Light_Dialog);
         AlertDialog.Builder builder = new AlertDialog.Builder(wrapper);
         builder.setTitle("Select Target Language");
-        
+
         builder.setItems(LanguageUtils.LANGUAGE_NAMES, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 directTargetLangCode = LanguageUtils.getCode(which);
                 Toast.makeText(BubbleKeyboardService.this, "Target: " + LanguageUtils.LANGUAGE_NAMES[which], Toast.LENGTH_SHORT).show();
-                
+
                 if (isDirectTranslateEnabled) {
                     toggleDirectTranslationMode();
                     toggleDirectTranslationMode();
                 }
-                
+
                 dialog.dismiss();
             }
         });
-        
+
         AlertDialog dialog = builder.create();
-        
+
         Window window = dialog.getWindow();
         if (window != null) {
             WindowManager.LayoutParams lp = window.getAttributes();
-            
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
             } else {
                 lp.type = WindowManager.LayoutParams.TYPE_PHONE;
             }
-            
+
             window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
             window.setAttributes(lp);
         }
@@ -679,7 +680,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private void setupEmojiControlButtons() {
         View btnBack = emojiPaletteView.findViewById(R.id.btn_back_to_abc);
         if (btnBack != null) btnBack.setOnClickListener(v -> toggleEmojiPalette());
-        
+
         View btnDel = emojiPaletteView.findViewById(R.id.btn_emoji_backspace);
         if (btnDel != null) btnDel.setOnClickListener(v -> handleBackspace());
     }
@@ -741,7 +742,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                     translationBuffer.deleteCharAt(translationBuffer.length() - 1);
                     translationUiManager.updateInputPreview(translationBuffer.toString());
                     updateCandidates(getLastWord(translationBuffer.toString()));
-                    
+
                     if (translationBuffer.length() == 0) {
                         ic.deleteSurroundingText(lastSentTranslationLength, 0);
                         lastSentTranslationLength = 0;
@@ -795,7 +796,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 String textToTranslate = translationBuffer.toString();
                 translationBuffer.setLength(0);
                 translationUiManager.updateInputPreview("");
-                
+
                 if (lastSentTranslationLength > 0 && !textToTranslate.isEmpty()) {
                     lastSentTranslationLength = 0;
                     lastSentTranslation = "";
@@ -804,7 +805,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                     clearTranslationOnNextResult = true;
                     translationUiManager.performTranslation(textToTranslate);
                 }
-                
+
                 if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
                 updateCandidates("");
             } else if (isDirectTranslateEnabled) {
@@ -859,7 +860,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 } else {
                     String typo = currentWord.toString();
                     boolean correctionApplied = false;
-                    
+
                     if (!ignoreNextCorrection && typo.length() > 1) {
                         String correction = PredictionEngine.getInstance(this).getBestMatch(typo);
                         if (correction != null && !correction.equals(typo)) {
@@ -910,7 +911,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             translationBuffer.append(code);
             translationUiManager.updateInputPreview(translationBuffer.toString());
             updateCandidates(getLastWord(translationBuffer.toString()));
-            
+
             if (toolbarContainer != null) toolbarContainer.setVisibility(View.GONE);
         } else if (isDirectTranslateEnabled) {
             directBuffer.append(code);
@@ -1074,7 +1075,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
     private void updateCandidates(String wordBeingTyped) {
         if (candidateContainer == null) return;
-        
+
         candidateContainer.removeAllViews();
         List<String> suggestions;
 
@@ -1094,7 +1095,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             tv.setTextSize(18);
             tv.setPadding(40, 20, 40, 20);
             tv.setBackgroundResource(android.R.drawable.list_selector_background);
-            
+
             tv.setOnClickListener(v -> {
                 if (isTranslationMode) {
                     if (translationBuffer.length() == 0) {
