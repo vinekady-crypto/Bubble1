@@ -359,8 +359,15 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
             btn.setOnClickListener(v -> handleToolClick(toolId));
 
-            // Long click initiates dynamic Gboard-style drag-and-drop customization mode
+            // Context-Aware Long Click Listener
             btn.setOnLongClickListener(v -> {
+                // If the customization grid panel is NOT open, trigger custom language popup
+                if ("direct_translate".equals(toolId) && !isGridMenuVisible) {
+                    showDirectLanguagePopup(v);
+                    return true;
+                }
+
+                // If customization grid is open, trigger dynamic drag shadow and customizer flow
                 if (!isGridMenuVisible) {
                     toggleGridMenu(); // Open grid customizable panel automatically
                 }
@@ -402,7 +409,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             ScannerUiManager.getInstance(this).show();
         } else if ("autosave".equals(toolId)) {
             toggleAutoSaveMode();
-            buildActiveToolbar(); // Refresh toolbar states to update auto save active tint
         } else if ("settings".equals(toolId)) {
             Intent intent = new Intent(this, SettingsActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -578,6 +584,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         } else {
             Toast.makeText(this, "Real-Time Saving OFF", Toast.LENGTH_SHORT).show();
         }
+        buildActiveToolbar(); // Refreshes active toolbar configuration dynamically to reflect state tint
     }
 
     // --- NEW: Update Clipboard in Real-Time (Safety Logic) ---
@@ -649,6 +656,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         } else {
             Toast.makeText(this, "Live Translation OFF", Toast.LENGTH_SHORT).show();
         }
+        buildActiveToolbar(); // Refreshes active toolbar configuration dynamically to reflect state tint
     }
 
     private void performDirectTranslation(final String text) {
