@@ -1,21 +1,29 @@
 package com.app.bubble;
 
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.view.ContextThemeWrapper;
+import android.view.DragEvent;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputConnection;
@@ -26,6 +34,12 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,20 +73,22 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private Runnable directTranslateRunnable;
     private ExecutorService bgExecutor = Executors.newSingleThreadExecutor();
 
-    // --- NEW AUTO SAVE VARIABLES ---
-    private ImageButton btnAutoSave;
+    // --- AUTO SAVE VARIABLES ---
     private boolean isAutoSaveEnabled = false;
     private StringBuilder autoSaveBuffer = new StringBuilder();
     private boolean isTypingNewEntry = true; // True = Create new clip; False = Update existing clip
 
-    private ImageButton btnClipboard;
-    private ImageButton btnKeyboardSwitch;
-    private ImageButton btnTranslate;
-    private ImageButton btnDirectTranslate; 
-    private ImageButton btnBubbleLauncher; 
-    private ImageButton btnOcrCopy; 
-    private ImageButton btnScanner; // NEW: Scanner Button
-    private ImageButton btnSettings; // NEW: Settings Button
+    // Dynamic Customizable Toolbar Views
+    private ImageButton btnGridMenu;
+    private LinearLayout activeToolsContainer;
+    private View gridMenuView;
+    private RecyclerView gridMenuRecycler;
+    private GridMenuAdapter gridAdapter;
+    private boolean isGridMenuVisible = false;
+
+    // Helper managers
+    private SharedPreferences sharedPreferences;
+    private VoiceInputManager voiceInputManager;
 
     private Keyboard keyboardQwerty;
     private Keyboard keyboardSymbols;
@@ -90,6 +106,15 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private Handler longPressHandler = new Handler(Looper.getMainLooper());
     private boolean isSpaceLongPressed = false;
     private static final int LONG_PRESS_DELAY = 500; 
+
+    // Persistent storage keys for dynamic layout customization
+    private static final String PREFS_NAME = "BubbleTranslatorPrefs";
+    private static final String KEY_ACTIVE_TOOLS = "KeyboardActiveTools";
+    private static final String KEY_INACTIVE_TOOLS = "KeyboardInactiveTools";
+
+    // Defaults matching Gboard first-run installation specification
+    private static final String DEFAULT_ACTIVE_TOOLS = "clipboard,translate,autosave,mic";
+    private static final String DEFAULT_INACTIVE_TOOLS = "keyboard_switch,direct_translate,bubble_launcher,ocr_copy,scanner,settings";
 
     private Runnable spaceLongPressRunnable = new Runnable() {
         @Override
@@ -164,7 +189,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                     if (selectedText != null && selectedText.length() > 0) {
                         hasSelection = true;
                     } else {
-                        // Check cursor selection range via ExtractedText if getSelectedText() is unsupported or returned null
                         android.view.inputmethod.ExtractedText et = ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
                         if (et != null && et.selectionStart != et.selectionEnd) {
                             hasSelection = true;
@@ -172,10 +196,8 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                     }
 
                     if (hasSelection) {
-                        // Replace the selected text with an empty string (deletes highlighted selection)
                         ic.commitText("", 1);
                     } else if (lastSentTranslationLength > 0) {
-                        // Fallback to deleting surrounding translation text
                         ic.deleteSurroundingText(lastSentTranslationLength, 0);
                     }
                 }
@@ -187,19 +209,43 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 if (toolbarContainer != null) toolbarContainer.setVisibility(View.VISIBLE);
                 updateCandidates("");
                 
-                toggleTranslationMode(); // Closes translation mode afterward
+                toggleTranslationMode();
             }
         });
         mainLayout.addView(translationPanelView);
+
+        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        voiceInputManager = new VoiceInputManager(this, new VoiceInputManager.VoiceInputListener() {
+            @Override
+            public void onTranscriptionResult(String text) {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null && text != null && !text.isEmpty()) {
+                    ic.commitText(text, 1);
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(BubbleKeyboardService.this, "Voice Input Error: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
 
         candidateView = inflater.inflate(R.layout.candidate_view, mainLayout, false);
         candidateContainer = candidateView.findViewById(R.id.candidate_container);
         toolbarContainer = candidateView.findViewById(R.id.toolbar_container);
         
-        setupToolbarButtons();
+        // Permanent 4-Square Button setup
+        btnGridMenu = candidateView.findViewById(R.id.btn_grid_menu);
+        activeToolsContainer = candidateView.findViewById(R.id.active_tools_container);
+        
+        if (btnGridMenu != null) {
+            btnGridMenu.setOnClickListener(v -> toggleGridMenu());
+        }
+
+        buildActiveToolbar();
         mainLayout.addView(candidateView);
 
-        // Note: Using the layout that might contain GboardKeyboardView
+        // Standard QWERTY / Symbols Keys layout
         kv = (KeyboardView) inflater.inflate(R.layout.layout_real_keyboard, mainLayout, false);
         keyboardQwerty = new Keyboard(this, R.xml.qwerty);
         keyboardSymbols = new Keyboard(this, R.xml.symbols);
@@ -207,6 +253,15 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         kv.setOnKeyboardActionListener(this);
         kv.setPreviewEnabled(false); 
         mainLayout.addView(kv);
+
+        // Inflate Gboard-style customization layout, invisible by default
+        gridMenuView = inflater.inflate(R.layout.layout_keyboard_grid_menu, mainLayout, false);
+        gridMenuView.setVisibility(View.GONE);
+        gridMenuRecycler = gridMenuView.findViewById(R.id.grid_menu_recycler);
+        gridMenuRecycler.setLayoutManager(new GridLayoutManager(this, 4));
+        gridAdapter = new GridMenuAdapter();
+        gridMenuRecycler.setAdapter(gridAdapter);
+        mainLayout.addView(gridMenuView);
 
         emojiPaletteView = inflater.inflate(R.layout.layout_emoji_palette, mainLayout, false);
         emojiPaletteView.setVisibility(View.GONE);
@@ -257,106 +312,268 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         });
         mainLayout.addView(clipboardPaletteView);
 
+        setupToolbarDragListeners();
+
         return mainLayout;
     }
 
     private void setupToolbarButtons() {
-        btnClipboard = candidateView.findViewById(R.id.btn_clipboard);
-        if (btnClipboard != null) btnClipboard.setOnClickListener(v -> toggleClipboardPalette());
-        
-        btnKeyboardSwitch = candidateView.findViewById(R.id.btn_keyboard_switch);
-        if (btnKeyboardSwitch != null) {
-            btnKeyboardSwitch.setOnClickListener(v -> {
-                InputMethodManager ime = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (ime != null) ime.showInputMethodPicker();
-            });
-        }
-        
-        btnTranslate = candidateView.findViewById(R.id.btn_translate);
-        if (btnTranslate != null) btnTranslate.setOnClickListener(v -> toggleTranslationMode());
-        
-        btnDirectTranslate = candidateView.findViewById(R.id.btn_direct_translate);
-        if (btnDirectTranslate != null) {
-            btnDirectTranslate.setOnLongClickListener(v -> {
-                showDirectLanguagePopup(v);
+        // Handled dynamically inside buildActiveToolbar()
+    }
+
+    /**
+     * Programmatically reconstructs active tool buttons on candidate view
+     * based on user's persisted preferences.
+     */
+    private void buildActiveToolbar() {
+        if (activeToolsContainer == null) return;
+        activeToolsContainer.removeAllViews();
+
+        String activeString = sharedPreferences.getString(KEY_ACTIVE_TOOLS, DEFAULT_ACTIVE_TOOLS);
+        List<String> activeIds = new ArrayList<>(Arrays.asList(activeString.split(",")));
+
+        int itemWidth = (int) (45 * getResources().getDisplayMetrics().density);
+
+        for (final String toolId : activeIds) {
+            if (toolId.trim().isEmpty()) continue;
+
+            final ImageButton btn = new ImageButton(this);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(itemWidth, LinearLayout.LayoutParams.MATCH_PARENT);
+            btn.setLayoutParams(params);
+            btn.setImageResource(getToolDrawableId(toolId));
+            btn.setBackgroundResource(android.R.drawable.list_selector_background);
+            btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            btn.setPadding(10, 10, 10, 10);
+            btn.setContentDescription(getString(getToolLabelId(toolId)));
+
+            // Handle dynamic active state tint colors
+            if ("autosave".equals(toolId) && isAutoSaveEnabled) {
+                btn.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
+            } else if ("direct_translate".equals(toolId) && isDirectTranslateEnabled) {
+                btn.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
+            } else {
+                btn.setColorFilter(Color.parseColor("#5F6368"), PorterDuff.Mode.SRC_IN);
+            }
+
+            btn.setOnClickListener(v -> handleToolClick(toolId));
+
+            // Long click initiates dynamic Gboard-style drag-and-drop customization mode
+            btn.setOnLongClickListener(v -> {
+                if (!isGridMenuVisible) {
+                    toggleGridMenu(); // Open grid customizable panel automatically
+                }
+                ClipData data = ClipData.newPlainText("tool_id", toolId);
+                View.DragShadowBuilder shadowBuilder = new View.DragShadowBuilder(v);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    v.startDragAndDrop(data, shadowBuilder, v, 0);
+                } else {
+                    v.startDrag(data, shadowBuilder, v, 0);
+                }
                 return true;
             });
-            btnDirectTranslate.setOnClickListener(v -> {
-                if (isDirectTranslateEnabled) {
-                    toggleDirectTranslationMode();
-                } else {
-                    long clickTime = System.currentTimeMillis();
-                    if (clickTime - lastGlobeClickTime < 500) {
-                        toggleDirectTranslationMode();
-                    } else {
-                        Toast.makeText(BubbleKeyboardService.this, "Double tap to Enable", Toast.LENGTH_SHORT).show();
-                    }
-                    lastGlobeClickTime = clickTime;
+
+            activeToolsContainer.addView(btn);
+        }
+    }
+
+    private void handleToolClick(String toolId) {
+        if ("clipboard".equals(toolId)) {
+            toggleClipboardPalette();
+        } else if ("keyboard_switch".equals(toolId)) {
+            InputMethodManager ime = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (ime != null) ime.showInputMethodPicker();
+        } else if ("translate".equals(toolId)) {
+            toggleTranslationMode();
+        } else if ("direct_translate".equals(toolId)) {
+            toggleDirectTranslationMode();
+        } else if ("bubble_launcher".equals(toolId)) {
+            Intent intent = new Intent(this, FloatingTranslatorService.class);
+            intent.setAction("ACTION_SHOW_BUBBLE");
+            startService(intent);
+        } else if ("ocr_copy".equals(toolId)) {
+            requestHideSelf(0);
+            Intent intent = new Intent(this, FloatingTranslatorService.class);
+            intent.setAction("ACTION_TRIGGER_COPY_ONLY");
+            startService(intent);
+        } else if ("scanner".equals(toolId)) {
+            requestHideSelf(0);
+            ScannerUiManager.getInstance(this).show();
+        } else if ("autosave".equals(toolId)) {
+            toggleAutoSaveMode();
+            buildActiveToolbar(); // Refresh toolbar states to update auto save active tint
+        } else if ("settings".equals(toolId)) {
+            Intent intent = new Intent(this, SettingsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } else if ("mic".equals(toolId)) {
+            triggerVoiceInput();
+        }
+    }
+
+    private void triggerVoiceInput() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            
+            Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show();
+            // Launch the Main Settings redirection
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } else {
+            if (voiceInputManager != null) {
+                voiceInputManager.toggleListening();
+            }
+        }
+    }
+
+    private int getToolDrawableId(String toolId) {
+        switch (toolId) {
+            case "clipboard": return R.drawable.content_paste_24px;
+            case "keyboard_switch": return R.drawable.change_circle_24px;
+            case "translate": return R.drawable.g_translate_24px;
+            case "direct_translate": return R.drawable.electric_bolt_24px;
+            case "bubble_launcher": return R.drawable.bubble_24px;
+            case "ocr_copy": return R.drawable.select_all_24px;
+            case "scanner": return R.drawable.document_scanner_24px;
+            case "autosave": return R.drawable.save_24px;
+            case "settings": return R.drawable.settings_24px;
+            case "mic": return R.drawable.mic_24px;
+            default: return R.drawable.settings_24px;
+        }
+    }
+
+    private int getToolLabelId(String toolId) {
+        switch (toolId) {
+            case "clipboard": return R.string.label_clipboard;
+            case "keyboard_switch": return R.string.label_keyboard_switch;
+            case "translate": return R.string.label_translate;
+            case "direct_translate": return R.string.label_direct_translate;
+            case "bubble_launcher": return R.string.label_bubble_launcher;
+            case "ocr_copy": return R.string.label_ocr_copy;
+            case "scanner": return R.string.label_scanner;
+            case "autosave": return R.string.label_autosave;
+            case "mic": return R.string.label_microphone;
+            default: return R.string.settings_title;
+        }
+    }
+
+    private void toggleGridMenu() {
+        if (gridMenuView.getVisibility() == View.GONE) {
+            kv.setVisibility(View.GONE);
+            emojiPaletteView.setVisibility(View.GONE);
+            clipboardPaletteView.setVisibility(View.GONE);
+            translationPanelView.setVisibility(View.GONE);
+            isTranslationMode = false;
+            
+            gridMenuView.setVisibility(View.VISIBLE);
+            isGridMenuVisible = true;
+            btnGridMenu.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
+            
+            // Reload available tools lists
+            loadGridAdapterData();
+        } else {
+            resetToStandardKeyboard();
+        }
+    }
+
+    private void loadGridAdapterData() {
+        String inactiveString = sharedPreferences.getString(KEY_INACTIVE_TOOLS, DEFAULT_INACTIVE_TOOLS);
+        List<String> inactiveIds = new ArrayList<>(Arrays.asList(inactiveString.split(",")));
+        gridAdapter.setData(inactiveIds);
+    }
+
+    private void setupToolbarDragListeners() {
+        // Drag listener for candidate toolbar to intercept dropped tools from grid menu
+        activeToolsContainer.setOnDragListener(new View.OnDragListener() {
+            @Override
+            public boolean onDrag(View v, DragEvent event) {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        return event.getClipDescription().hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN);
+
+                    case DragEvent.ACTION_DROP:
+                        ClipData.Item item = event.getClipData().getItemAt(0);
+                        String draggedToolId = item.getText().toString();
+
+                        String activeString = sharedPreferences.getString(KEY_ACTIVE_TOOLS, DEFAULT_ACTIVE_TOOLS);
+                        List<String> activeIds = new ArrayList<>(Arrays.asList(activeString.split(",")));
+
+                        String inactiveString = sharedPreferences.getString(KEY_INACTIVE_TOOLS, DEFAULT_INACTIVE_TOOLS);
+                        List<String> inactiveIds = new ArrayList<>(Arrays.asList(inactiveString.split(",")));
+
+                        if (inactiveIds.contains(draggedToolId)) {
+                            inactiveIds.remove(draggedToolId);
+                            activeIds.add(draggedToolId);
+
+                            // Save layouts
+                            sharedPreferences.edit()
+                                .putString(KEY_ACTIVE_TOOLS, TextUtils.join(",", activeIds))
+                                .putString(KEY_INACTIVE_TOOLS, TextUtils.join(",", inactiveIds))
+                                .apply();
+
+                            buildActiveToolbar();
+                            loadGridAdapterData();
+                        }
+                        return true;
+
+                    default:
+                        return true;
                 }
-            });
-        }
+            }
+        });
 
-        btnBubbleLauncher = candidateView.findViewById(R.id.btn_bubble_launcher);
-        if (btnBubbleLauncher != null) {
-            btnBubbleLauncher.setOnClickListener(v -> {
-                Intent intent = new Intent(BubbleKeyboardService.this, FloatingTranslatorService.class);
-                intent.setAction("ACTION_SHOW_BUBBLE");
-                startService(intent);
-            });
-        }
-        
-        btnOcrCopy = candidateView.findViewById(R.id.btn_ocr_copy);
-        if (btnOcrCopy != null) {
-            btnOcrCopy.setOnClickListener(v -> {
-                requestHideSelf(0);
-                Intent intent = new Intent(BubbleKeyboardService.this, FloatingTranslatorService.class);
-                intent.setAction("ACTION_TRIGGER_COPY_ONLY");
-                startService(intent);
-            });
-        }
+        // Drag listener on the grid container to intercept dropped active tools pulled down from toolbar
+        gridMenuView.setOnDragListener(new View.OnDragListener() {
+            @Override
+            public boolean onDrag(View v, DragEvent event) {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        return event.getClipDescription().hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN);
 
-        // --- NEW: SCANNER BUTTON LOGIC ---
-        btnScanner = candidateView.findViewById(R.id.btn_scanner);
-        if (btnScanner != null) {
-            btnScanner.setOnClickListener(v -> {
-                // 1. Hide the Soft Keyboard
-                requestHideSelf(0);
-                
-                // 2. Launch the Full Screen Scanner
-                ScannerUiManager.getInstance(BubbleKeyboardService.this).show();
-            });
-        }
+                    case DragEvent.ACTION_DROP:
+                        ClipData.Item item = event.getClipData().getItemAt(0);
+                        String draggedToolId = item.getText().toString();
 
-        // --- NEW AUTO SAVE BUTTON SETUP ---
-        btnAutoSave = candidateView.findViewById(R.id.btn_autosave);
-        if (btnAutoSave != null) {
-            btnAutoSave.setOnClickListener(v -> toggleAutoSaveMode());
-        }
+                        String activeString = sharedPreferences.getString(KEY_ACTIVE_TOOLS, DEFAULT_ACTIVE_TOOLS);
+                        List<String> activeIds = new ArrayList<>(Arrays.asList(activeString.split(",")));
 
-        // --- NEW: SETTINGS BUTTON LOGIC ---
-        btnSettings = candidateView.findViewById(R.id.btn_settings);
-        if (btnSettings != null) {
-            btnSettings.setOnClickListener(v -> {
-                Intent intent = new Intent(BubbleKeyboardService.this, SettingsActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            });
-        }
+                        String inactiveString = sharedPreferences.getString(KEY_INACTIVE_TOOLS, DEFAULT_INACTIVE_TOOLS);
+                        List<String> inactiveIds = new ArrayList<>(Arrays.asList(inactiveString.split(",")));
+
+                        // Do not allow empty candidate view toolbar, ensure at least one active tool remains
+                        if (activeIds.contains(draggedToolId) && activeIds.size() > 1) {
+                            activeIds.remove(draggedToolId);
+                            inactiveIds.add(draggedToolId);
+
+                            // Save layouts
+                            sharedPreferences.edit()
+                                .putString(KEY_ACTIVE_TOOLS, TextUtils.join(",", activeIds))
+                                .putString(KEY_INACTIVE_TOOLS, TextUtils.join(",", inactiveIds))
+                                .apply();
+
+                            buildActiveToolbar();
+                            loadGridAdapterData();
+                        } else if (activeIds.size() <= 1) {
+                            Toast.makeText(BubbleKeyboardService.this, "At least one tool must remain in active view", Toast.LENGTH_SHORT).show();
+                        }
+                        return true;
+
+                    default:
+                        return true;
+                }
+            }
+        });
     }
 
     // --- NEW: Toggle Auto Save Mode ---
     private void toggleAutoSaveMode() {
         isAutoSaveEnabled = !isAutoSaveEnabled;
         if (isAutoSaveEnabled) {
-            // Blue Color -> ON
-            btnAutoSave.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
-            Toast.makeText(this, "Real-Time Saving ON", Toast.LENGTH_SHORT).show();
             // Start a new tracking session
             autoSaveBuffer.setLength(0);
             isTypingNewEntry = true;
+            Toast.makeText(this, "Real-Time Saving ON", Toast.LENGTH_SHORT).show();
         } else {
-            // No Color -> OFF
-            btnAutoSave.clearColorFilter();
             Toast.makeText(this, "Real-Time Saving OFF", Toast.LENGTH_SHORT).show();
         }
     }
@@ -369,13 +586,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         if (!isTypingNewEntry) {
             // Assume the previous state was just 1 char shorter
             if (currentText.length() > 0) {
-                 // We need to delete the version that was saved *before* this keystroke.
-                 // Since we don't track the exact string perfectly in variable, we rely on clipboard add/remove behavior.
-                 // Ideally, we delete the *top* item if it matches our session.
-                 // For simplicity and speed: We delete the item that corresponds to the buffer-1 char.
-                 // Note: Ideally we would use a simpler logic: just add new. But you requested "update".
-                 // So we add the new one. The user sees "growth".
-                 // To prevent spam, we *attempt* to remove the previous entry.
                  String prevText = currentText.substring(0, currentText.length() - 1);
                  ClipboardManagerHelper.getInstance(this).deleteItem(prevText);
             }
@@ -391,7 +601,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     }
 
     private void showDirectLanguagePopup(View v) {
-        // Use System Theme for correct look
         Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Light_Dialog);
         AlertDialog.Builder builder = new AlertDialog.Builder(wrapper);
         builder.setTitle("Select Target Language");
@@ -402,20 +611,17 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 directTargetLangCode = LanguageUtils.getCode(which);
                 Toast.makeText(BubbleKeyboardService.this, "Target: " + LanguageUtils.LANGUAGE_NAMES[which], Toast.LENGTH_SHORT).show();
                 
-                // If translation is currently active, toggle it to refresh language
                 if (isDirectTranslateEnabled) {
                     toggleDirectTranslationMode();
                     toggleDirectTranslationMode();
                 }
                 
-                // Close the dialog immediately after selection
                 dialog.dismiss();
             }
         });
         
         AlertDialog dialog = builder.create();
         
-        // Setup Window attributes to prevent keyboard closing (OVERLAY TYPE)
         Window window = dialog.getWindow();
         if (window != null) {
             WindowManager.LayoutParams lp = window.getAttributes();
@@ -426,7 +632,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 lp.type = WindowManager.LayoutParams.TYPE_PHONE;
             }
             
-            // Flag to prevent stealing focus from the keyboard
             window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
             window.setAttributes(lp);
         }
@@ -436,12 +641,10 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     private void toggleDirectTranslationMode() {
         isDirectTranslateEnabled = !isDirectTranslateEnabled;
         if (isDirectTranslateEnabled) {
-            btnDirectTranslate.setColorFilter(Color.parseColor("#2196F3"), PorterDuff.Mode.SRC_IN);
             Toast.makeText(this, "Live Translation ON (Auto -> " + directTargetLangCode + ")", Toast.LENGTH_SHORT).show();
             directBuffer.setLength(0);
             lastDirectOutputLength = 0;
         } else {
-            btnDirectTranslate.clearColorFilter();
             Toast.makeText(this, "Live Translation OFF", Toast.LENGTH_SHORT).show();
         }
     }
@@ -505,7 +708,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
         // --- DELETE KEY LOGIC ---
         if (primaryCode == Keyboard.KEYCODE_DELETE) {
-            // NEW: Handle Real-Time Deletion for Auto-Save
+            // Handle Real-Time Deletion for Auto-Save
             if (isAutoSaveEnabled && autoSaveBuffer.length() > 0) {
                 boolean hasSelection = false;
                 CharSequence selectedText = ic.getSelectedText(0);
@@ -519,22 +722,15 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 }
 
                 if (hasSelection) {
-                    // Reset/Clear Auto-Save buffer if a larger block is highlighted and removed
                     ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
                     autoSaveBuffer.setLength(0);
                     isTypingNewEntry = true;
                 } else {
-                    // 1. Remove the "current" text from clipboard
                     ClipboardManagerHelper.getInstance(this).deleteItem(autoSaveBuffer.toString());
-                    
-                    // 2. Reduce buffer
                     autoSaveBuffer.deleteCharAt(autoSaveBuffer.length() - 1);
-                    
-                    // 3. Add the "new shorter" text back to clipboard (if not empty)
                     if (autoSaveBuffer.length() > 0) {
                         ClipboardManagerHelper.getInstance(this).addClip(autoSaveBuffer.toString());
                     } else {
-                        // Buffer empty, next type is new
                         isTypingNewEntry = true;
                     }
                 }
@@ -552,7 +748,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                         lastSentTranslation = "";
                     } 
                 } else {
-                    // Fallthrough fallback if the input preview is already empty but active
                     handleBackspace();
                 }
             } else if (isDirectTranslateEnabled) {
@@ -590,7 +785,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         }
 
         if (primaryCode == Keyboard.KEYCODE_DONE) { 
-            // NEW: Enter Key finalized the text - Start new entry
+            // Enter Key finalized the text - Start new entry
             if (isAutoSaveEnabled) {
                 isTypingNewEntry = true;
                 autoSaveBuffer.setLength(0);
@@ -601,8 +796,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 translationBuffer.setLength(0);
                 translationUiManager.updateInputPreview("");
                 
-                // Fixed Issue #1: If the live translation is already fully matching and on screen,
-                // do not call performTranslation again. Finalize tracking and avoid double-commits.
                 if (lastSentTranslationLength > 0 && !textToTranslate.isEmpty()) {
                     lastSentTranslationLength = 0;
                     lastSentTranslation = "";
@@ -646,14 +839,13 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
 
         if (primaryCode == 32) { 
             if (!isSpaceLongPressed) {
-                // NEW: Space also saves immediately
+                // Space also saves immediately
                 if (isAutoSaveEnabled) {
                     autoSaveBuffer.append(" ");
                     updateAutoSaveClipboard();
                 }
 
                 if (isTranslationMode) {
-                    // Reset character boundary tracking if typing begins on a fresh buffer
                     if (translationBuffer.length() == 0) {
                         lastSentTranslationLength = 0;
                         lastSentTranslation = "";
@@ -704,14 +896,13 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             code = Character.toUpperCase(code);
         }
 
-        // NEW: Real-Time Character Saving
+        // Real-Time Character Saving
         if (isAutoSaveEnabled) {
             autoSaveBuffer.append(code);
             updateAutoSaveClipboard();
         }
 
         if (isTranslationMode) {
-            // Reset character boundary tracking if typing begins on a fresh buffer
             if (translationBuffer.length() == 0) {
                 lastSentTranslationLength = 0;
                 lastSentTranslation = "";
@@ -756,7 +947,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
                 }
             }
 
-            // Sync state and clean suggestions if a selection was deleted
             if (selectionDeleted) {
                 currentWord.setLength(0);
                 if (toolbarContainer != null) {
@@ -784,6 +974,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             clipboardPaletteView.setVisibility(View.GONE);
             translationPanelView.setVisibility(View.GONE);
             isTranslationMode = false;
+            if (isGridMenuVisible) {
+                gridMenuView.setVisibility(View.GONE);
+                isGridMenuVisible = false;
+                btnGridMenu.clearColorFilter();
+            }
             emojiPaletteView.setVisibility(View.VISIBLE);
         } else {
             resetToStandardKeyboard();
@@ -800,6 +995,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             }
             candidateView.setVisibility(View.GONE);
             emojiPaletteView.setVisibility(View.GONE);
+            if (isGridMenuVisible) {
+                gridMenuView.setVisibility(View.GONE);
+                isGridMenuVisible = false;
+                btnGridMenu.clearColorFilter();
+            }
             clipboardPaletteView.setVisibility(View.VISIBLE);
             if (clipboardUiManager != null) clipboardUiManager.reloadHistory();
         } else {
@@ -819,6 +1019,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             candidateView.setVisibility(View.VISIBLE); 
             clipboardPaletteView.setVisibility(View.GONE);
             emojiPaletteView.setVisibility(View.GONE);
+            if (isGridMenuVisible) {
+                gridMenuView.setVisibility(View.GONE);
+                isGridMenuVisible = false;
+                btnGridMenu.clearColorFilter();
+            }
             translationPanelView.setVisibility(View.VISIBLE);
             kv.setVisibility(View.VISIBLE);
             isTranslationMode = true;
@@ -835,6 +1040,11 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
         emojiPaletteView.setVisibility(View.GONE);
         clipboardPaletteView.setVisibility(View.GONE);
         translationPanelView.setVisibility(View.GONE);
+        if (isGridMenuVisible) {
+            gridMenuView.setVisibility(View.GONE);
+            isGridMenuVisible = false;
+            btnGridMenu.clearColorFilter();
+        }
         candidateView.setVisibility(View.VISIBLE);
         kv.setVisibility(View.VISIBLE);
         isTranslationMode = false;
@@ -887,7 +1097,6 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             
             tv.setOnClickListener(v -> {
                 if (isTranslationMode) {
-                    // Reset boundary tracking if candidate pasting begins on a fresh buffer
                     if (translationBuffer.length() == 0) {
                         lastSentTranslationLength = 0;
                         lastSentTranslation = "";
@@ -929,4 +1138,59 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
     @Override public void swipeRight() {}
     @Override public void swipeDown() {}
     @Override public void swipeUp() {}
+
+    // --- NEW: ADAPTER FOR GRID CUSTOMIZATION ---
+    private class GridMenuAdapter extends RecyclerView.Adapter<GridMenuAdapter.ViewHolder> {
+        private List<String> dataList = new ArrayList<>();
+
+        public void setData(List<String> data) {
+            this.dataList = new ArrayList<>(data);
+            notifyDataSetChanged();
+        }
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_grid_tool, parent, false);
+            return new ViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            final String toolId = dataList.get(position);
+            holder.textLabel.setText(getToolLabelId(toolId));
+            holder.imgIcon.setImageResource(getToolDrawableId(toolId));
+            holder.imgIcon.setColorFilter(Color.parseColor("#5F6368"), PorterDuff.Mode.SRC_IN);
+
+            holder.itemView.setOnClickListener(v -> handleToolClick(toolId));
+
+            // Long click on item in customize grid triggers drag-to-toolbar action
+            holder.itemView.setOnLongClickListener(v -> {
+                ClipData data = ClipData.newPlainText("tool_id", toolId);
+                View.DragShadowBuilder shadowBuilder = new View.DragShadowBuilder(holder.imgIcon);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    v.startDragAndDrop(data, shadowBuilder, v, 0);
+                } else {
+                    v.startDrag(data, shadowBuilder, v, 0);
+                }
+                return true;
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return dataList.size();
+        }
+
+        class ViewHolder extends RecyclerView.ViewHolder {
+            android.widget.ImageView imgIcon;
+            TextView textLabel;
+
+            public ViewHolder(@NonNull View itemView) {
+                super(itemView);
+                imgIcon = itemView.findViewById(R.id.tool_icon);
+                textLabel = itemView.findViewById(R.id.tool_label);
+            }
+        }
+    }
 }
