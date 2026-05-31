@@ -29,6 +29,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
@@ -454,7 +455,7 @@ public class BubbleKeyboardService extends InputMethodService implements Keyboar
             case "scanner": return R.string.label_scanner;
             case "autosave": return R.string.label_autosave;
             case "mic": return R.string.label_microphone;
-            default: return R.string.settings_title;
+            default: return R.string.app_name; // Changed to app_name fallback for safety
         }
     }
 
